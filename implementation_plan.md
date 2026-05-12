@@ -422,100 +422,96 @@ details from it.
 
 ### 1.5 PDF Generation Strategy
 
-**Decision: Server-side generation using `@react-pdf/renderer` inside API routes.**
+**Decision: Server-side generation using `@sparticuz/chromium-min` + `puppeteer-core` inside API routes.**
 
-**Why `@react-pdf/renderer`:**
-- **Component-based:** PDFs are defined as React components with JSX — the same mental model as the rest of the app. Text wrapping, pagination, and Flexbox layout are handled automatically.
-- **Serverless-native:** Zero external binaries. No headless browser. Works on Vercel's serverless functions out of the box with minimal cold starts.
-- **Rich output:** Supports custom fonts (`.ttf`/`.otf`), embedded images (PNG/JPG), clickable `<Link>` annotations, styled tables, and dynamic multi-page layouts — all the things needed for premium proposals and invoices.
-- **Premium quality:** The Yoga layout engine (same as React Native) produces clean, consistent layouts across all environments. No browser rendering inconsistencies.
+**Why `@sparticuz/chromium-min` + `puppeteer-core`:**
+- **Full CSS rendering:** PDFs are generated from real HTML/CSS rendered by a headless Chromium instance. This means full support for gradients, box shadows, border-radius, CSS Grid, Flexbox, multi-column layouts — the complete CSS specification. The output quality is in a different league from any layout engine approximation.
+- **Web fonts:** Any font available via Google Fonts or self-hosted is usable with a simple `@import` or `@font-face` declaration. No font registration APIs or `.ttf` file management. Inter Variable works out of the box.
+- **Native clickable links:** Standard `<a href>` tags in the HTML become clickable links in the PDF — works in every PDF viewer without special annotation APIs.
+- **Premium quality:** What you design in HTML is pixel-for-pixel what the PDF looks like. No Yoga layout engine quirks, no missing CSS features. Ideal for producing the best proposals in the market.
+- **Serverless-compatible:** `@sparticuz/chromium-min` is a stripped-down Chromium build (~50MB compressed) specifically designed for AWS Lambda and Vercel serverless functions. It fits within Vercel's bundle size limits.
+- **Familiar dev experience:** PDF templates are just HTML template strings with inline CSS — no new API to learn. Any frontend developer can build and iterate on them.
 
-**Why NOT pdf-lib:**
-- `pdf-lib` has no auto-wrapping, no layout engine, no pagination. Every line of text must be manually positioned with x/y coordinates. Building rich multi-page proposals would take 3–5x longer and produce inferior results.
+**Why NOT `@react-pdf/renderer`:**
+- Uses the Yoga layout engine (React Native's layout system) instead of a real browser rendering engine. While adequate for simple documents, it lacks full CSS support — no gradients, limited box shadows, no CSS Grid, constrained typography control.
+- Custom `StyleSheet` API with its own syntax — an additional abstraction layer to learn and maintain.
+- Font embedding requires `.ttf` files and manual `Font.register()` calls.
+- For a product where PDF quality is a competitive differentiator ("best proposals in the market"), the output ceiling is too low.
 
-**Why NOT Puppeteer/Playwright:**
-- Requires bundling a headless Chromium binary (~280MB). Exceeds Vercel's 50MB compressed bundle limit without special configuration (`@sparticuz/chromium-min`).
-- Slow cold starts (3-8 seconds), high memory consumption, and brittle in serverless environments.
-- Overkill for structured documents like proposals and invoices.
+**Why NOT pdf-lib / pdfkit:**
+- No layout engine at all. Every line of text must be manually positioned with x/y coordinates. Building rich multi-page proposals would take 3–5x longer and produce inferior results.
+
+**Cold start tradeoff:**
+- First invocation on a cold serverless function takes ~3-5 seconds to initialize Chromium. Subsequent invocations within the warm window are ~1-2 seconds.
+- This is acceptable because PDF generation is always user-triggered (explicit "Download PDF" button click), never on page load. Users expect a brief wait for document generation.
 
 **Architecture:**
 - Two API routes: `GET /api/proposals/[id]/pdf` and `GET /api/invoices/[id]/pdf`.
-- Each route fetches the entity from Supabase, loads the user's profile (logo, brand color), renders the React PDF component with `renderToBuffer()`, and returns the binary response.
-- **PDF component structure:**
+- Each route fetches the entity from Supabase, loads the user's profile (logo, brand color), builds an HTML string from a template function, launches headless Chromium, renders the HTML to PDF, and returns the binary response.
+- **PDF template structure:**
   ```
   lib/pdf/
-  ├── shared.tsx       # Shared components: Header, Footer, Watermark, Divider, styles
-  ├── proposal.tsx     # <ProposalDocument /> — full proposal PDF component
-  └── invoice.tsx      # <InvoiceDocument /> — full invoice PDF component
+  ├── browser.ts            # Chromium launch helper (cached across invocations)
+  ├── proposal-template.ts  # buildProposalHTML(proposal, profile) → HTML string
+  └── invoice-template.ts   # buildInvoiceHTML(invoice, profile) → HTML string
   ```
 
 **Font strategy:**
-- Register Inter (Regular, Medium, Bold, SemiBold) using `Font.register()` from `@react-pdf/renderer`.
-- Store `.ttf` files in `public/fonts/`. Reference by absolute URL in production, relative path in dev.
-- Use `fontFamily: 'Inter'` throughout all PDF styles.
+- Load Inter via Google Fonts CDN directly in the HTML template: `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700')`.
+- Use `font-family: 'Inter', sans-serif` throughout all PDF styles.
+- No `.ttf` files needed, no font registration — the browser fetches and renders them natively.
 
 **Brand colour integration:**
-- Parse `profile.brand_color` hex string.
-- Use it for: section heading text, horizontal rule strokes, the "Pay Now" button background, and accent borders.
-- Passed as a prop to all PDF components.
+- Interpolate `profile.brand_color` directly into CSS template strings.
+- Use it for: section heading text colour, horizontal rule `border-color`, the "Pay Now" button `background-color`, and accent borders.
+- Passed as a parameter to all template functions.
 
 **Logo embedding:**
-- Fetch the logo URL from `profile.logo_url`.
-- Use `@react-pdf/renderer`'s `<Image src={logoUrl} />` component. It natively supports PNG and JPG.
-- Set fixed dimensions (e.g., `width: 80, height: 80`) with `objectFit: 'contain'`.
+- Use a standard `<img src="${profile.logo_url}" />` tag in the HTML template.
+- Chromium fetches and renders the image natively — supports PNG, JPG, WebP, SVG, and any web-accessible format.
+- Set fixed dimensions via CSS (e.g., `width: 80px; height: 80px; object-fit: contain`).
 
-**Implementation example — Proposal PDF component:**
-```tsx
-import { Document, Page, View, Text, Image, Link, Font, StyleSheet } from '@react-pdf/renderer';
+**Implementation example — Browser helper:**
+```typescript
+// lib/pdf/browser.ts
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium-min';
 
-Font.register({
-  family: 'Inter',
-  fonts: [
-    { src: '/fonts/Inter-Regular.ttf', fontWeight: 'normal' },
-    { src: '/fonts/Inter-Bold.ttf', fontWeight: 'bold' },
-    { src: '/fonts/Inter-SemiBold.ttf', fontWeight: 600 },
-  ],
-});
+export async function generatePDF(html: string): Promise<Buffer> {
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(
+      'https://github.com/nichochar/chromium-binaries/raw/main/chromium-v131.0.0-pack.tar'
+    ),
+    headless: true,
+  });
 
-const ProposalDocument = ({ proposal, profile }) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      {/* Header with logo + developer info */}
-      <View style={styles.header}>
-        {profile.logo_url && <Image src={profile.logo_url} style={styles.logo} />}
-        <View>
-          <Text style={styles.name}>{profile.full_name}</Text>
-        </View>
-      </View>
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
 
-      {/* Proposal content sections */}
-      <View style={styles.section}>
-        <Text style={[styles.heading, { color: profile.brand_color }]}>THE CHALLENGE</Text>
-        <Text style={styles.body}>{proposal.edited_content.problemRestatement}</Text>
-      </View>
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: { top: '40px', right: '40px', bottom: '40px', left: '40px' },
+  });
 
-      {/* ... remaining sections: solution, deliverables, timeline, pricing, CTA */}
-
-      {/* Footer with watermark for free tier */}
-      {profile.subscription_tier === 'free' && (
-        <Text style={styles.watermark}>Made with Clinch</Text>
-      )}
-    </Page>
-  </Document>
-);
+  await browser.close();
+  return Buffer.from(pdf);
+}
 ```
 
-**API route example:**
+**Implementation example — API route:**
 ```typescript
-import { renderToBuffer } from '@react-pdf/renderer';
+import { generatePDF } from '@/lib/pdf/browser';
+import { buildProposalHTML } from '@/lib/pdf/proposal-template';
 
 export async function GET(req, { params }) {
   const proposal = await fetchProposal(params.id);
   const profile = await fetchProfile(proposal.user_id);
 
-  const pdfBuffer = await renderToBuffer(
-    <ProposalDocument proposal={proposal} profile={profile} />
-  );
+  const html = buildProposalHTML(proposal, profile);
+  const pdfBuffer = await generatePDF(html);
 
   return new Response(pdfBuffer, {
     headers: {
@@ -592,11 +588,11 @@ export async function GET(req, { params }) {
 ```
 
 > [!IMPORTANT]
-> The "Pay Now" button in the invoice PDF is rendered using `@react-pdf/renderer`'s `<Link>` component wrapping a styled `<View>`. When the client opens the PDF and clicks it, their browser opens the Stripe-hosted checkout page. This is the critical UX moment for the freelancer.
+> The "Pay Now" button in the invoice PDF is rendered as a standard `<a href>` tag wrapping a styled `<div>` in the HTML template. When the client opens the PDF and clicks it, their browser opens the Stripe-hosted checkout page. This is the critical UX moment for the freelancer. Chromium's PDF renderer produces native PDF link annotations from HTML anchor tags — these are clickable in every major PDF viewer.
 
 ### 1.5a Logo Upload Specification
 
-**Accepted formats:** PNG and JPG only (`image/png`, `image/jpeg`). SVG and WebP are **not** accepted — `@react-pdf/renderer`'s `<Image>` component only reliably supports PNG and JPG.
+**Accepted formats:** PNG and JPG only (`image/png`, `image/jpeg`). While `puppeteer-core` + Chromium can render any image format (including SVG and WebP), we restrict uploads to PNG and JPG for consistency and broad compatibility across email clients and other contexts where the logo may be displayed.
 
 **Size limit:** 2MB maximum. Validate on both client (before upload, for fast UX feedback) and server (in the API route, as a security guard).
 
@@ -1275,25 +1271,24 @@ All styling is done via **inline Tailwind classes** on shadcn components:
 
 ### Day 3: Branded PDF Export (Proposals) + Send to Client
 
-1. **Build shared PDF components** (`lib/pdf/shared.tsx`):
-   - `<PDFHeader />` — logo + developer name/contact, reused by both proposal and invoice PDFs.
-   - `<PDFFooter />` — watermark for free tier ("Made with Clinch"), clean footer for Pro/Agency.
-   - `<SectionHeading />` — styled heading using brand colour.
-   - `<Divider />` — horizontal rule in brand colour.
-   - Shared `StyleSheet` with consistent typography, spacing, and colour tokens.
+1. **Build the Chromium PDF helper** (`lib/pdf/browser.ts`):
+   - `generatePDF(html: string): Promise<Buffer>` — launches headless Chromium via `@sparticuz/chromium-min` + `puppeteer-core`, renders the HTML string, returns a PDF buffer.
+   - Chromium binary is fetched from a CDN URL on first invocation and cached.
+   - Uses `page.pdf()` with A4 format, `printBackground: true`, and consistent margins.
 
-2. **Build the proposal PDF component** (`lib/pdf/proposal.tsx`):
-   - React component: `<ProposalDocument proposal={...} profile={...} />`.
-   - Uses `@react-pdf/renderer`'s `<Document>`, `<Page>`, `<View>`, `<Text>`, `<Image>`, `<Link>`.
-   - Register Inter font (Regular, Bold, SemiBold) via `Font.register()`. Store `.ttf` files in `public/fonts/`.
-   - Layout as specified in §1.5 — text wrapping and pagination handled automatically by the Yoga layout engine.
-   - Brand colour: passed as a prop, used for heading text colour and accent elements.
-   - Logo: `<Image src={profile.logo_url} />` — PNG/JPG embedding handled natively.
+2. **Build the proposal HTML template** (`lib/pdf/proposal-template.ts`):
+   - `buildProposalHTML(proposal, profile): string` — returns a complete HTML string.
+   - Loads Inter font via Google Fonts `@import`.
+   - Full CSS styling: gradients, shadows, brand colour accents, section headings, deliverable lists, timeline, pricing.
+   - Layout as specified in §1.5 — rendered pixel-perfectly by Chromium's layout engine.
+   - Brand colour: interpolated into CSS via template literals, used for heading text colour and accent elements.
+   - Logo: `<img src="${profile.logo_url}" />` — rendered natively by Chromium.
    - Watermark: conditional rendering based on `profile.subscription_tier`.
 
 3. **Build the PDF API route** (`GET /api/proposals/[id]/pdf`):
    - Fetch the proposal (`edited_content`) and the user's profile.
-   - Call `renderToBuffer(<ProposalDocument ... />)` from `@react-pdf/renderer`.
+   - Call `buildProposalHTML(proposal, profile)` to generate the HTML template.
+   - Call `generatePDF(html)` to render to PDF via headless Chromium.
    - Return the PDF as a response with:
      ```
      Content-Type: application/pdf
@@ -1301,7 +1296,7 @@ All styling is done via **inline Tailwind classes** on shadcn components:
      ```
 
 4. **Build the Send to Client API** (`POST /api/proposals/[id]/send`):
-   - Generate the PDF in-memory using `renderToBuffer()`.
+   - Generate the PDF in-memory using `buildProposalHTML()` + `generatePDF()`.
    - Send via Resend with PDF attachment (see §1.9 for full spec).
    - Update `proposals.status` to `'sent'`.
    - Rate limit: use `generalApiLimiter` (see §1.8).
@@ -1342,14 +1337,14 @@ All styling is done via **inline Tailwind classes** on shadcn components:
 
 ### Day 5: Invoice PDF + Stripe Payment Link
 
-1. **Build the invoice PDF component** (`lib/pdf/invoice.tsx`):
-   - React component: `<InvoiceDocument invoice={...} profile={...} />`.
-   - Same shared components as proposal PDF (header, footer, divider).
-   - Line items rendered using `@react-pdf/renderer`'s `<View>` with Flexbox — columns for Description, Qty, Rate, Total.
+1. **Build the invoice HTML template** (`lib/pdf/invoice-template.ts`):
+   - `buildInvoiceHTML(invoice, profile): string` — returns a complete HTML string.
+   - Same font loading and shared styling approach as the proposal template.
+   - Line items rendered using CSS Flexbox/table layout — columns for Description, Qty, Rate, Total.
    - Totals section with subtotals, tax, discount, and bold total.
    - If `stripe_payment_link_url` exists on the invoice, render a clickable "Pay Now" button:
-     - `<Link src={stripe_payment_link_url}>` wrapping a styled `<View>` with rounded corners, brand colour background, and white `<Text>`: "Pay Now — ${total}".
-     - This is natively clickable in PDF viewers — no manual annotation needed.
+     - `<a href="${stripe_payment_link_url}">` wrapping a styled `<div>` with rounded corners, brand colour background, and white text: "Pay Now — ${total}".
+     - Chromium renders this as a native PDF link annotation — clickable in every major PDF viewer.
    - Same watermark logic as proposals.
 
 2. **Build Stripe Connect OAuth flow:**
