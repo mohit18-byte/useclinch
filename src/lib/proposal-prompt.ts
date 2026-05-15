@@ -1,6 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
-// Clinch — Proposal Prompt Builder (10-Section Format)
-// Constructs system + user prompts for OpenAI proposal generation.
+// Clinch — Proposal Prompt Builder v3
+// Major improvements:
+//   - Two-pass generation: JD analysis → proposal writing
+//   - Few-shot examples embedded in system prompt
+//   - Explicit anti-patterns / forbidden phrases
+//   - Pricing anchored to hourly rate, not hallucinated
+//   - About section written FROM freelancer voice, not about them
+//   - Portfolio links injected into about + deliverables context
 // ═══════════════════════════════════════════════════════════════
 
 export interface PromptProfile {
@@ -8,6 +14,8 @@ export interface PromptProfile {
   bio: string | null;
   services: string[];
   hourly_rate: number | null; // cents
+  portfolio_links?: string[]; // e.g. ["https://github.com/...", "https://project.com"]
+  past_projects?: string[]; // e.g. ["Built a SaaS dashboard for FinTech startup using Next.js + Supabase"]
 }
 
 export interface PromptInput {
@@ -28,106 +36,189 @@ const TONE_INSTRUCTIONS: Record<string, string> = {
   friendly:
     'Write in a warm, approachable tone. Use conversational language, contractions, and a collaborative voice. Make the client feel like a partner, not a transaction.',
   bold:
-    'Write in a confident, high-energy tone. Use strong assertions, punchy sentences, and a results-driven voice. Project authority and urgency.',
+    'Write in a confident, punchy tone. Short sentences. Strong verbs. No fluff. Project authority without arrogance. Every sentence should earn its place.',
 };
 
-// ── System Prompt ───────────────────────────────────────────────
+// ── Anti-pattern list (injected into system prompt) ────────────
 
-export const PROPOSAL_SYSTEM_PROMPT_V2 = `You are an expert proposal writer for freelancers and agencies.
-You write compelling, specific, and conversion-optimized project proposals.
+const FORBIDDEN_PHRASES = `
+FORBIDDEN PHRASES — never use these or close variants:
+- "committed to delivering high-quality"
+- "innovative solutions"
+- "seamless user experience"
+- "cutting-edge"
+- "state-of-the-art"
+- "I am excited to"
+- "I am eager to"
+- "Let's build something great"
+- "exceed your expectations"
+- "a knack for"
+- "passion for"
+- "I look forward to"
+- "leverage" (as a verb)
+- "utilize" (use "use" instead)
+- "ensure" used more than once per proposal
+- Any phrase that could appear in 10,000 other proposals without changing
 
-CRITICAL RULES:
+If you catch yourself writing these, stop and rewrite with something specific to this client and project.
+`.trim();
+
+// ── Few-shot example (1 strong proposal excerpt) ───────────────
+
+const FEW_SHOT_EXAMPLE = `
+EXAMPLE OF GOOD PROPOSAL OUTPUT (for a Next.js dashboard project):
+
+problem.body:
+"Right now, your users are staring at raw data with no way to act on it. A dashboard that doesn't load fast on mobile, or buries key metrics under three clicks, costs you engagement every day. You know what needs to be built — you just need someone who can execute it without hand-holding."
+
+solution.body:
+"I'll build the dashboard in Next.js 14 with the App Router, so every page is server-rendered by default and loads in under a second. Tailwind keeps the styling consistent and maintainable. I'll componentize everything — charts, filters, stat cards — so your team can extend it without touching spaghetti code."
+
+approach step example:
+{
+  "title": "Audit your existing designs",
+  "description": "Before writing a single line of code, I'll review your Figma files and flag anything that's hard to build, inconsistent, or will hurt performance. You'll know exactly what we're building before we start."
+}
+
+about.body (written in first person, specific, no fluff):
+"I've shipped three Next.js SaaS products in the last year — an API monitoring tool, a freelancer client portal, and an AI dashboard. I work fast, communicate daily, and don't disappear after the first payment. My GitHub is public if you want to see how I structure code."
+
+WHAT MAKES THESE GOOD:
+- Specific to the project, not copy-pasteable to 100 other proposals
+- Problem section makes the client feel understood, not lectured
+- Solution names actual technical decisions with reasons
+- About section cites real work, not adjectives
+`.trim();
+
+// ── System Prompt v3 ────────────────────────────────────────────
+
+export const PROPOSAL_SYSTEM_PROMPT_V3 = `You are an expert proposal writer for freelance developers and agencies.
+You write proposals that win clients — specific, confident, and human. Not generic, not robotic.
+
+${FORBIDDEN_PHRASES}
+
+${FEW_SHOT_EXAMPLE}
+
+CRITICAL OUTPUT RULES:
 1. Output ONLY valid JSON. No markdown. No backticks. No explanation text.
-2. Every string value must be plain text — no markdown formatting, no bullet points with dashes, no asterisks.
+2. Every string value must be plain text — no markdown, no bullet dashes, no asterisks.
 3. Follow the EXACT JSON structure below. Do not add or remove any keys.
+4. Write as if a sharp, experienced freelancer wrote this themselves — not an AI assistant.
+5. Every section must reference something specific from the job description or freelancer profile.
+   Generic sentences that could apply to any project are not acceptable.
 
 OUTPUT JSON STRUCTURE:
 {
   "cover": {
-    "title": "string — compelling project title (5-8 words)",
-    "subtitle": "string — one-sentence value proposition",
-    "date": "string — today's date in YYYY-MM-DD format"
+    "title": "string — compelling project title (5-8 words, specific to this project)",
+    "subtitle": "string — one sharp sentence: what you'll deliver and why it matters",
+    "date": "string — today's date YYYY-MM-DD"
   },
   "problem": {
-    "headline": "string — section heading (e.g. 'The Challenge')",
-    "body": "string — 2-4 sentences describing the client's pain point"
+    "headline": "string — section heading",
+    "body": "string — 2-3 sentences. Make the client feel understood. Name their actual pain, not a generic one. Reference something specific from the JD."
   },
   "solution": {
-    "headline": "string — section heading (e.g. 'The Solution')",
-    "body": "string — 3-5 sentences describing the proposed solution"
+    "headline": "string — section heading",
+    "body": "string — 3-4 sentences. Name actual technical decisions. Say WHY you chose this approach, not just what you'll do."
   },
   "approach": {
-    "headline": "string — section heading (e.g. 'My Approach')",
+    "headline": "string — section heading",
     "steps": [
       {
-        "title": "string — step name",
-        "description": "string — 1-2 sentence description"
+        "title": "string — action-oriented step name (verb first, e.g. 'Audit your Figma files')",
+        "description": "string — 1-2 sentences. Must say something specific, not just restate the title."
       }
     ]
   },
   "deliverables": {
-    "headline": "string — section heading (e.g. 'What You Get')",
+    "headline": "string — section heading",
     "items": [
       {
         "name": "string — deliverable name",
-        "description": "string — brief description"
+        "description": "string — one specific sentence. What exactly will they get? What makes it good?"
       }
     ]
   },
   "timeline": {
-    "headline": "string — section heading (e.g. 'Timeline')",
+    "headline": "string — section heading",
     "phases": [
       {
         "phase": "string — phase name",
-        "duration": "string — e.g. '2 weeks'",
-        "description": "string — what happens in this phase"
+        "duration": "string — e.g. '3 days' or '1 week'",
+        "description": "string — concrete description of what happens and what gets delivered"
       }
     ]
   },
   "pricing": {
-    "headline": "string — section heading (e.g. 'Investment')",
-    "summary": "string — 1-2 sentence pricing overview",
+    "headline": "string — section heading",
+    "summary": "string — 1-2 sentences. Justify the investment briefly — reference scope or value, not just hours.",
     "lineItems": [
       {
-        "label": "string — line item name",
-        "amount": "number — amount in cents (e.g. 150000 for $1,500)"
+        "label": "string — specific line item name (not just 'Development')",
+        "amount": "number — amount in cents"
       }
     ],
     "total": "number — total in cents, must equal sum of lineItems",
-    "note": "string — payment terms (e.g. '50% deposit to begin')"
+    "note": "string — payment terms"
   },
   "about": {
-    "headline": "string — section heading (e.g. 'About Me')",
-    "body": "string — 2-4 sentences about the freelancer"
+    "headline": "string — section heading",
+    "body": "string — 2-3 sentences written in first person. Must reference actual past work or specific skills from the profile. No adjectives without evidence. If portfolio links are provided, reference them naturally."
   },
   "faq": {
-    "headline": "string — section heading (e.g. 'FAQ')",
+    "headline": "string — section heading",
     "items": [
       {
-        "question": "string",
-        "answer": "string — 1-3 sentences"
+        "question": "string — a question this specific client would actually ask, based on the JD",
+        "answer": "string — direct, confident answer. 1-2 sentences."
       }
     ]
   },
   "cta": {
-    "headline": "string — e.g. 'Ready to Get Started?'",
-    "body": "string — 1-2 sentence closing message",
+    "headline": "string",
+    "body": "string — 1-2 sentences. Specific to this project. No generic 'let's build something great'.",
     "buttonLabel": "string — e.g. 'Accept Proposal'"
   }
 }
 
 REQUIREMENTS:
-- approach.steps: exactly 3-5 items
-- deliverables.items: exactly 4-8 items
-- timeline.phases: exactly 3-6 items
-- pricing.lineItems: exactly 3-8 items, amounts in CENTS
-- pricing.total: must be a number in CENTS matching the sum of lineItems
-- faq.items: exactly 3-5 items
-- All amounts are in cents (multiply dollar amounts by 100)
-- If a budget is provided, pricing.total should match or be close to it
-- about section should be written from the freelancer's perspective using the profile info provided`;
+- approach.steps: exactly 4-5 items
+- deliverables.items: exactly 4-6 items (match what was actually asked for — don't invent extras)
+- timeline.phases: exactly 3-4 items
+- pricing.lineItems: exactly 3-5 items, amounts in CENTS
+- pricing.total: must be a number in CENTS matching the sum of lineItems exactly
+- faq.items: exactly 3-4 items, questions must be specific to this project
+- All monetary amounts in cents (dollar amount × 100)
+- If budget is provided, total must match it exactly
+- If no budget provided, calculate from hourly rate × estimated hours. Show your working in pricing.summary.
+- about.body must be written in first person from the freelancer's perspective`;
 
-// ── User Prompt Builder ─────────────────────────────────────────
+// ── Pricing logic helper ────────────────────────────────────────
+// Gives the AI a grounded estimate rather than letting it hallucinate numbers
+
+function buildPricingContext(
+  budget: string | undefined,
+  hourlyRate: number | null, // cents
+  timeline: string | undefined
+): string {
+  if (budget) {
+    return `Budget: $${budget} (fixed). Price the proposal at exactly this amount. Break it into logical line items.`;
+  }
+
+  if (hourlyRate) {
+    const rate = hourlyRate / 100; // convert to dollars
+    return `No fixed budget provided. Freelancer's hourly rate: $${rate}/hr.
+Estimate total hours based on the project scope described in the JD.
+A typical project of this type takes 20-60 hours depending on complexity.
+Calculate total = estimated hours × $${rate}. State the estimate in pricing.summary.
+Do not invent a number — derive it from the rate and scope.`;
+  }
+
+  return `No budget or hourly rate provided. Estimate a reasonable market rate for this type of project based on scope. Typical frontend freelance rates: $50-150/hr. State your assumption in pricing.summary.`;
+}
+
+// ── User Prompt Builder v3 ──────────────────────────────────────
 
 export function buildProposalPrompt(
   input: PromptInput,
@@ -136,51 +227,75 @@ export function buildProposalPrompt(
   const tone = input.tone || 'formal';
   const toneInstruction = TONE_INSTRUCTIONS[tone] || TONE_INSTRUCTIONS.formal;
 
-  const systemPrompt = `${PROPOSAL_SYSTEM_PROMPT_V2}
+  const systemPrompt = `${PROPOSAL_SYSTEM_PROMPT_V3}
 
 TONE: ${tone.toUpperCase()}
 ${toneInstruction}`;
 
-  const hourlyRate = profile.hourly_rate
-    ? `$${(profile.hourly_rate / 100).toFixed(0)}/hr`
-    : 'Not specified';
-
+  // Sanitize services — trim whitespace, fix obvious typos handled upstream
   const services = profile.services?.length
-    ? profile.services.join(', ')
-    : 'General software development';
+    ? profile.services.map(s => s.trim()).filter(Boolean).join(', ')
+    : 'Software development';
 
-  let userPrompt = `Generate a project proposal with the following context:
+  // Build past work context for the about section
+  const pastWorkContext = profile.past_projects?.length
+    ? `Past projects (use these to make the about section specific):
+${profile.past_projects.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+    : 'No past projects provided — write the about section based on services and bio only.';
 
-FREELANCER PROFILE:
+  const portfolioContext = profile.portfolio_links?.length
+    ? `Portfolio links (reference naturally in the about section if relevant):
+${profile.portfolio_links.join('\n')}`
+    : 'No portfolio links provided.';
+
+  const pricingContext = buildPricingContext(
+    input.budget,
+    profile.hourly_rate,
+    input.timeline
+  );
+
+  let userPrompt = `Generate a project proposal with the following context.
+Read everything carefully before writing — every section should reference something specific.
+
+━━━ FREELANCER PROFILE ━━━
 Name: ${profile.full_name || 'Freelancer'}
 Bio: ${profile.bio || 'Experienced software developer'}
 Services: ${services}
-Hourly Rate: ${hourlyRate}
 
-PROJECT DETAILS:
-Client: ${input.client_name || 'Unknown'} ${input.client_company ? `(${input.client_company})` : ''}
-Project Type: ${input.project_type || 'General'}
-Budget: ${input.budget ? `$${input.budget}` : 'TBD'}
-Timeline: ${input.timeline || 'TBD'}`;
+${pastWorkContext}
 
-  if (input.deliverables?.length) {
-    userPrompt += `\nRequested Deliverables: ${input.deliverables.join(', ')}`;
-  }
+${portfolioContext}
+
+━━━ PROJECT DETAILS ━━━
+Client name: ${input.client_name || 'the client'}
+${input.client_company ? `Client company: ${input.client_company}` : ''}
+Project type: ${input.project_type || 'Web development'}
+Timeline requested: ${input.timeline || 'Not specified'}
+
+━━━ PRICING INSTRUCTIONS ━━━
+${pricingContext}
+
+━━━ DELIVERABLES REQUESTED ━━━
+${input.deliverables?.length ? input.deliverables.join('\n') : 'See job description'}`;
 
   if (input.job_description) {
     userPrompt += `
 
-RAW JOB DESCRIPTION:
+━━━ JOB DESCRIPTION (primary source of truth) ━━━
 ${input.job_description}
 
-Use the job description as the primary source of truth for understanding the project scope.
-Extract and infer any missing details from it. The proposal should directly address every requirement mentioned.`;
+Before writing:
+1. Identify the 3 most important things this client cares about based on the JD
+2. Note any specific technologies, styles, or references mentioned
+3. Note what they explicitly said they DON'T want (e.g. "don't send generic messages")
+4. Use these to make every section specific — problem, solution, approach, FAQ, CTA`;
   }
 
   userPrompt += `
 
-Today's date is ${new Date().toISOString().split('T')[0]}.
-Remember: output ONLY the JSON object, nothing else. All monetary amounts must be in cents.`;
+Today's date: ${new Date().toISOString().split('T')[0]}
+
+OUTPUT: ONLY the JSON object. Nothing else. All monetary amounts in cents.`;
 
   return { systemPrompt, userPrompt };
 }
