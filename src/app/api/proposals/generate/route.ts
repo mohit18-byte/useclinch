@@ -8,7 +8,6 @@ import type { SectionsConfig } from "@/templates/types";
 const TIER_LIMITS: Record<string, number> = {
   free: 5,
   pro: 999999,
-  agency: 999999,
 };
 
 // ── Default sections config ─────────────────────────────────────

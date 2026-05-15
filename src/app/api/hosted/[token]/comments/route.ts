@@ -126,7 +126,7 @@ async function sendCommentEmail(
   const sectionLabel = sectionKey ? SECTION_LABELS[sectionKey] || sectionKey : 'General';
 
   await resend.emails.send({
-    from: 'Clinch <notifications@clinch.dev>',
+    from: 'Clinch <notifications@useclinch.space>',
     to: freelancerEmail,
     subject: `💬 New comment on "${proposal.project_title}" — ${sectionLabel}`,
     html: `

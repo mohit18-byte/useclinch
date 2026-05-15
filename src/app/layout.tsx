@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     title: "Clinch — AI-Powered Proposals & Invoices for Freelancers",
     description:
       "Generate professional proposals in seconds with AI. Create branded invoices with Stripe payment links.",
-    url: "https://clinch.dev",
+    url: "https://useclinch.space",
     siteName: "Clinch",
     type: "website",
   },

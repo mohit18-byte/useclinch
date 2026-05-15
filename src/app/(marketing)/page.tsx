@@ -726,7 +726,8 @@ const plans = [
     features: [
       "5 AI proposals per month",
       "Hosted proposal pages",
-      "Invoice Builder",
+      "Invoice builder",
+      "Client management",
       "Clinch branding on proposals",
     ],
     cta: "Get started free",
@@ -737,33 +738,18 @@ const plans = [
     name: "Pro",
     price: "$19",
     period: "per month",
-    description: "For freelancers ready to scale",
+    description: "For freelancers ready to close more deals",
     features: [
       "Unlimited AI proposals",
       "Custom branding — no watermark",
-      "Client e-sign & payments",
-      "Proposal analytics",
-      "Priority support",
+      "Client e-sign",
+      "Real-time proposal analytics",
+      "Automated invoice follow-ups",
+
     ],
     cta: "Start Pro",
     href: "/signup",
     popular: true,
-  },
-  {
-    name: "Agency",
-    price: "$39",
-    period: "per month",
-    description: "For teams and high-volume freelancers",
-    features: [
-      "Everything in Pro",
-      "Team members (coming soon)",
-      "White-label proposals",
-      "Advanced analytics",
-      "Priority support",
-    ],
-    cta: "Go Agency",
-    href: "/signup",
-    popular: false,
   },
 ];
 
@@ -786,7 +772,7 @@ function Pricing() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
           {plans.map((plan) => (
             <div
               key={plan.name}
@@ -859,10 +845,7 @@ function Pricing() {
           ))}
         </div>
 
-        <p className="mt-6 text-center text-[12px] text-text-quaternary">
-          All paid plans include a 14-day free trial. No credit card required to
-          start.
-        </p>
+
       </div>
     </section>
   );

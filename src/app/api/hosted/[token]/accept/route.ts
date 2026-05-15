@@ -126,7 +126,7 @@ async function sendAcceptanceEmail(
   const signer = signerName || proposal.client_name;
 
   await resend.emails.send({
-    from: 'Clinch <notifications@clinch.dev>',
+    from: 'Clinch <notifications@useclinch.space>',
     to: freelancerEmail,
     subject: `🎉 Your proposal for "${proposal.project_title}" was accepted!`,
     html: `

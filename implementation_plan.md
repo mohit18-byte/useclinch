@@ -1080,13 +1080,12 @@ All styling is done via **inline Tailwind classes** on shadcn components:
    - Cards: `bg-white/[0.02] border border-white/[0.08] rounded-card p-6 hover:border-white/[0.12] transition-colors`.
 
    **Section 5 — Pricing:**
-   - Three pricing cards side-by-side (stack on mobile). Visually highlight the "Pro" plan as recommended.
-   - **Free:** $0/mo — 5 AI proposals/month, branded PDFs (with watermark), client management, invoice builder. CTA: "Get Started Free" → `/signup`.
-   - **Pro:** $19/mo — Unlimited AI proposals, no watermark, Stripe payment links, email sending. CTA: "Start Pro" → `/signup`. Add a "Most Popular" badge using `<Badge className="bg-brand/20 text-brand-accent rounded-pill text-[10px] font-medium">Most Popular</Badge>`. Pro card gets `border-brand/40` to visually distinguish it.
-   - **Agency:** $39/mo — Everything in Pro + priority support, team features (coming soon). CTA: "Go Agency" → `/signup`.
-   - Each card uses shadcn `Card` with `bg-white/[0.02] border border-white/[0.08] rounded-card`. Feature checklist uses `Check` icon in `text-status-success`.
+   - Two pricing cards side-by-side (stack on mobile, max-w-3xl centered). Visually highlight the "Pro" plan as recommended.
+   - **Starter:** $0/forever — 5 AI proposals/month, hosted proposal pages, invoice builder, client management, Clinch branding on proposals. CTA: "Get started free" → `/signup`.
+   - **Pro:** $19/mo — Unlimited AI proposals, custom branding (no watermark), client e-sign & deposit collection, real-time proposal analytics, automated invoice follow-ups, priority email support. CTA: "Start Pro" → `/signup`. Add a "Most Popular" badge. Pro card gets amber accent border to visually distinguish it.
+   - Each card uses `bg-white/[0.02] border border-white/[0.08] rounded-card`. Feature checklist uses `Check` icon in amber.
    - Price amount in `text-4xl font-medium tracking-heading-1 text-text-primary`. Period in `text-text-quaternary`.
-   - Below the cards: "All plans include a 14-day free trial. No credit card required." in `text-text-quaternary text-sm`.
+   - Below the cards: "All paid plans include a 14-day free trial. No credit card required to start." in `text-text-quaternary text-sm`.
 
    **Section 6 — Final CTA:**
    - Full-width section with `bg-surface-1 border-y border-white/[0.05]`. Alternatively, a subtle brand gradient: `bg-gradient-to-b from-brand/5 to-transparent`.

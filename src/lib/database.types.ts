@@ -7,7 +7,7 @@ import type { SectionDataMap, SectionsConfig } from '@/templates/types';
 
 // ── Enums ───────────────────────────────────────────────────────
 
-export type SubscriptionTier = 'free' | 'pro' | 'agency';
+export type SubscriptionTier = 'free' | 'pro';
 export type ProposalStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'won' | 'lost';
 export type InvoiceStatus = 'unpaid' | 'payment_claimed' | 'paid' | 'cancelled';
 export type PaymentMethod = 'manual' | 'stripe';

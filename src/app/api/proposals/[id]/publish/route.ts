@@ -143,7 +143,7 @@ async function sendVersionEmail(
   const sectionLabels = changedSections.map((k) => SECTION_LABELS[k] || k).join(', ');
 
   await resend.emails.send({
-    from: 'Clinch <notifications@clinch.dev>',
+    from: 'Clinch <notifications@useclinch.space>',
     to: proposal.client_email,
     subject: `📝 Updated proposal: "${proposal.project_title}" (v${versionNumber})`,
     html: `

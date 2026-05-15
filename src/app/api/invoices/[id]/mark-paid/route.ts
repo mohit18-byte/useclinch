@@ -80,7 +80,7 @@ export async function PATCH(_request: Request, context: RouteContext) {
         }).format(invoice.total_cents / 100);
 
         await resend.emails.send({
-          from: 'Clinch <notifications@clinch.dev>',
+          from: 'Clinch <notifications@useclinch.space>',
           to: invoice.client_email,
           subject: `Your invoice ${invoice.invoice_number} has been marked as paid`,
           html: `
