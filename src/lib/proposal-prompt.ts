@@ -239,27 +239,16 @@ ${toneInstruction}`;
 
   // Build past work context for the about section
   const pastWorkContext = profile.past_projects?.length
-    ? `Past projects (use these to make the about section specific):
-<<<<<<< HEAD
-${profile.past_projects.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
-    : 'No past projects provided — write the about section based on services and bio only.';
-
-  const portfolioContext = profile.portfolio_links?.length
-    ? `Portfolio links (reference naturally in the about section if relevant):
-${profile.portfolio_links.join('\n')}`
-    : 'No portfolio links provided.';
-=======
-${profile.past_projects.map((p, i) => {
-  const parts = [`${i + 1}. ${p.name}: ${p.description}`];
-  if (p.link) parts.push(`   Link: ${p.link}`);
-  return parts.join('\n');
-}).join('\n')}`
+    ? `Past projects (use these to make the about section specific):\n${profile.past_projects.map((p, i) => {
+        const parts = [`${i + 1}. ${p.name}: ${p.description}`];
+        if (p.link) parts.push(`   Link: ${p.link}`);
+        return parts.join('\n');
+      }).join('\n')}`
     : 'No past projects provided — write the about section based on services and bio only.';
 
   const portfolioContext = profile.portfolio_url
     ? `Portfolio website: ${profile.portfolio_url} (reference naturally in the about section if relevant)`
     : 'No portfolio URL provided.';
->>>>>>> 948a3ce (feat: structured portfolio & past projects with Recent Work on proposals)
 
   const pricingContext = buildPricingContext(
     input.budget,
