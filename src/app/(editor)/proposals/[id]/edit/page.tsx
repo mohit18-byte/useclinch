@@ -43,7 +43,7 @@ export default async function ProposalEditPage({ params }: PageProps) {
   // Fetch profile from DB for template data
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, bio, services, logo_url, brand_color, professional_title')
+    .select('full_name, bio, services, logo_url, brand_color, professional_title, portfolio_url, past_projects')
     .eq('id', user.id)
     .single();
 
@@ -72,6 +72,8 @@ export default async function ProposalEditPage({ params }: PageProps) {
         services: profile?.services || [],
         logoUrl: profile?.logo_url || null,
         brandColor: profile?.brand_color || '#5e6ad2',
+        portfolioUrl: profile?.portfolio_url || null,
+        pastProjects: Array.isArray(profile?.past_projects) ? profile.past_projects : [],
       }}
     />
   );

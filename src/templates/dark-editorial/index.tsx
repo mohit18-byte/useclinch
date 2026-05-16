@@ -34,6 +34,16 @@ function formatDate(iso: string) {
   });
 }
 
+/** Strips protocol + www so the link label is clean, e.g. github.com/rohit */
+function formatLinkLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.hostname + u.pathname).replace(/^www\./, '').replace(/\/$/, '');
+  } catch {
+    return url;
+  }
+}
+
 /* ── useInView ───────────────────────────────────────────────── */
 function useInView(opts?: IntersectionObserverInit) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -387,6 +397,7 @@ function PricingTable({ data, proposal }: { data: PricingData; proposal: Proposa
 
 const AboutSection = React.memo(function AboutSection({ data, profile, isPdf }: { data: AboutData; profile: ProposalTemplateProps['profile']; isPdf?: boolean }) {
   const initial = profile.fullName?.charAt(0) || data.headline.charAt(0);
+
   const renderCard = () => (
     <div className="tpl-de__about-card">
       <div className="tpl-de__about-header">
@@ -408,6 +419,57 @@ const AboutSection = React.memo(function AboutSection({ data, profile, isPdf }: 
           {profile.services.map((s, i) => (
             <span key={i} className="tpl-de__about-pill">{s}</span>
           ))}
+        </div>
+      )}
+
+      {/* ── Selected Work ───────────────────────────────────────── */}
+      {profile.pastProjects && profile.pastProjects.length > 0 && (
+        <div className="tpl-de__about-work">
+          <span className="tpl-de__about-work-label">Recent Work</span>
+          <div className="tpl-de__about-work-list">
+            {profile.pastProjects.map((proj, i) => {
+              const Tag = proj.link ? 'a' : 'div';
+              const linkProps = proj.link
+                ? { href: proj.link, target: '_blank', rel: 'noopener noreferrer' }
+                : {};
+              return (
+                <Tag
+                  key={i}
+                  className={`tpl-de__about-work-row${proj.link ? ' tpl-de__about-work-row--linked' : ''}`}
+                  {...linkProps}
+                >
+                  <span className="tpl-de__about-work-name">
+                    {proj.name}
+                    {proj.link && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" className="tpl-de__about-work-icon">
+                        <path d="M2 10L10 2M10 2H4.5M10 2V7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="tpl-de__about-work-desc">{proj.description}</span>
+                </Tag>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {profile.portfolioUrl && (
+        <div className="tpl-de__about-links">
+          <span className="tpl-de__about-links-label">Portfolio</span>
+          <div className="tpl-de__about-links-row">
+            <a
+              href={profile.portfolioUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="tpl-de__about-link"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <path d="M2 10L10 2M10 2H4.5M10 2V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {formatLinkLabel(profile.portfolioUrl)}
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -1039,6 +1101,95 @@ const CSS = `
     padding: 0.3rem 0.85rem; border-radius: 999px;
     border: 1px solid var(--proposal-border);
     background: transparent;
+  }
+
+  /* ── ABOUT — selected work table ───────────────────────────── */
+  .tpl-de__about-work {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--proposal-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .tpl-de__about-work-label {
+    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--proposal-text-muted);
+  }
+  .tpl-de__about-work-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.1rem;
+  }
+  .tpl-de__about-work-row {
+    display: grid;
+    grid-template-columns: minmax(0, 10rem) 1fr;
+    gap: 1.25rem;
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--proposal-border);
+    align-items: center;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .tpl-de__about-work-row:first-child { border-top: none; }
+  .tpl-de__about-work-row--linked { cursor: pointer; }
+  .tpl-de__about-work-name {
+    font-size: 0.82rem; font-weight: 520;
+    color: var(--proposal-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 0.35rem;
+    transition: color 0.15s;
+  }
+  .tpl-de__about-work-icon {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--proposal-accent);
+  }
+  .tpl-de__about-work-row--linked:hover .tpl-de__about-work-name {
+    color: var(--proposal-accent);
+  }
+  .tpl-de__about-work-row--linked:hover .tpl-de__about-work-icon {
+    opacity: 1;
+  }
+  .tpl-de__about-work-desc {
+    font-size: 0.8rem;
+    color: var(--proposal-text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+
+  /* ── ABOUT — portfolio links ─────────────────────────────────── */
+  .tpl-de__about-links {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--proposal-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .tpl-de__about-links-label {
+    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--proposal-text-muted);
+  }
+  .tpl-de__about-links-row {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .tpl-de__about-link {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.8rem; font-weight: 500;
+    color: var(--proposal-accent);
+    padding: 0.3rem 0.85rem; border-radius: 999px;
+    border: 1px solid var(--proposal-accent);
+    background: transparent;
+    text-decoration: none;
+    transition: background 0.18s, color 0.18s;
+    opacity: 0.85;
+  }
+  .tpl-de__about-link:hover {
+    background: var(--proposal-accent);
+    color: var(--proposal-accent-fg);
+    opacity: 1;
   }
 
   .tpl-de__pricing {

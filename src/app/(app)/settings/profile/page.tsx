@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Plus, Upload, Save, Loader2 } from "lucide-react";
 
+interface PastProject {
+  name: string;
+  description: string;
+  link?: string;
+}
+
 interface Profile {
   full_name: string;
   professional_title: string;
@@ -18,6 +24,8 @@ interface Profile {
   logo_url: string | null;
   subscription_tier: string;
   default_payment_instructions: string;
+  portfolio_url: string | null;  // single URL
+  past_projects: PastProject[];  // structured work history
 }
 
 export default function SettingsProfilePage() {
@@ -28,6 +36,12 @@ export default function SettingsProfilePage() {
   const [saved, setSaved] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [portfolioError, setPortfolioError] = useState("");
+  const [newProject, setNewProject] = useState<{ name: string; description: string; link: string }>({
+    name: "",
+    description: "",
+    link: "",
+  });
 
   const [profile, setProfile] = useState<Profile>({
     full_name: "",
@@ -39,6 +53,8 @@ export default function SettingsProfilePage() {
     logo_url: null,
     subscription_tier: "free",
     default_payment_instructions: "",
+    portfolio_url: null,
+    past_projects: [],
   });
 
   // Fetch profile on mount
@@ -57,6 +73,8 @@ export default function SettingsProfilePage() {
           logo_url: data.logo_url,
           subscription_tier: data.subscription_tier || "free",
           default_payment_instructions: data.default_payment_instructions || "",
+          portfolio_url: data.portfolio_url || null,
+          past_projects: Array.isArray(data.past_projects) ? data.past_projects : [],
         });
       }
       setLoading(false);
@@ -80,6 +98,23 @@ export default function SettingsProfilePage() {
 
   function removeService(service: string) {
     update({ services: profile.services.filter((s) => s !== service) });
+  }
+
+
+  // Past project management — structured { name, description, link }
+  function addPastProject() {
+    const name = newProject.name.trim();
+    const description = newProject.description.trim();
+    if (!name || !description) return;
+    if (profile.past_projects.length >= 5) return;
+    const proj: PastProject = { name, description };
+    if (newProject.link.trim()) proj.link = newProject.link.trim();
+    update({ past_projects: [...profile.past_projects, proj] });
+    setNewProject({ name: "", description: "", link: "" });
+  }
+
+  function removePastProject(index: number) {
+    update({ past_projects: profile.past_projects.filter((_, i) => i !== index) });
   }
 
   // Logo upload
@@ -134,6 +169,8 @@ export default function SettingsProfilePage() {
           brand_color: profile.brand_color,
           logo_url: profile.logo_url,
           default_payment_instructions: profile.default_payment_instructions || null,
+          portfolio_url: profile.portfolio_url || null,
+          past_projects: profile.past_projects,
         }),
       });
 
@@ -306,6 +343,116 @@ export default function SettingsProfilePage() {
                   className="h-10 rounded-md border border-[#23252a] bg-[#08090a] pl-7 text-[14px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Portfolio & Past Work */}
+        <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-6">
+          <div className="mb-1">
+            <h2 className="text-[14px] font-[520] text-white">Portfolio &amp; Past Work</h2>
+            <p className="mt-0.5 text-[12px] text-[#62666d]">
+              Portfolio link appears on your hosted proposals. Past projects help the AI write a specific, credible About section.
+            </p>
+          </div>
+          <div className="mt-5 space-y-7">
+
+            {/* Single Portfolio URL */}
+            <div className="space-y-1.5">
+              <Label className="text-[12px] text-[#8a8f98]">Portfolio / Website URL</Label>
+              <Input
+                placeholder="https://yourportfolio.com"
+                value={profile.portfolio_url || ""}
+                onChange={(e) => {
+                  update({ portfolio_url: e.target.value || null });
+                  if (portfolioError) setPortfolioError("");
+                }}
+                className="h-10 rounded-md border border-[#23252a] bg-[#08090a] text-[14px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
+              />
+              {portfolioError && <p className="text-[12px] text-red-400">{portfolioError}</p>}
+            </div>
+
+            {/* Past Projects */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-[12px] text-[#8a8f98]">
+                  Past projects{" "}
+                  <span className="text-[#62666d]">
+                    ({profile.past_projects.length}/5 added — used by AI for your About section)
+                  </span>
+                </Label>
+              </div>
+
+              {/* Add project form */}
+              {profile.past_projects.length < 5 && (
+                <div className="rounded-lg border border-[#23252a] bg-[#08090a] p-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-[#62666d] uppercase tracking-wide">Project name</Label>
+                    <Input
+                      placeholder="e.g. Clinch — Freelancer SaaS"
+                      value={newProject.name}
+                      onChange={(e) => setNewProject((p) => ({ ...p, name: e.target.value }))}
+                      className="h-9 rounded-md border border-[#23252a] bg-[#0f1011] text-[13px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-[#62666d] uppercase tracking-wide">What you built</Label>
+                    <Textarea
+                      placeholder="e.g. Built a full-stack proposal + invoice SaaS for freelancers using Next.js, Supabase, and Stripe"
+                      value={newProject.description}
+                      onChange={(e) => setNewProject((p) => ({ ...p, description: e.target.value }))}
+                      rows={2}
+                      className="rounded-md border border-[#23252a] bg-[#0f1011] text-[13px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0 resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-[#62666d] uppercase tracking-wide">
+                      Link <span className="normal-case">(optional)</span>
+                    </Label>
+                    <Input
+                      placeholder="https://github.com/you/project or https://live-demo.com"
+                      value={newProject.link}
+                      onChange={(e) => setNewProject((p) => ({ ...p, link: e.target.value }))}
+                      className="h-9 rounded-md border border-[#23252a] bg-[#0f1011] text-[13px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={addPastProject}
+                    disabled={!newProject.name.trim() || !newProject.description.trim()}
+                    className="h-8 rounded-md bg-white/[0.06] px-3 text-[12px] font-[500] text-[#8a8f98] hover:bg-white/[0.1] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border border-[#23252a]"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Add project
+                  </Button>
+                </div>
+              )}
+
+              {/* Project cards */}
+              {profile.past_projects.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {profile.past_projects.map((proj, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-[#23252a] bg-[#08090a] px-4 py-3 flex items-start gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-[510] text-white truncate">{proj.name}</p>
+                        <p className="mt-0.5 text-[12px] text-[#62666d] line-clamp-2">{proj.description}</p>
+                        {proj.link && (
+                          <p className="mt-1 text-[11px] text-[#5e6ad2] truncate">{proj.link}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removePastProject(idx)}
+                        className="text-[#62666d] hover:text-white shrink-0 mt-0.5"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

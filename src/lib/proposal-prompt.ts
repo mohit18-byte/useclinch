@@ -14,8 +14,8 @@ export interface PromptProfile {
   bio: string | null;
   services: string[];
   hourly_rate: number | null; // cents
-  portfolio_links?: string[]; // e.g. ["https://github.com/...", "https://project.com"]
-  past_projects?: string[]; // e.g. ["Built a SaaS dashboard for FinTech startup using Next.js + Supabase"]
+  portfolio_url?: string | null; // single portfolio website URL
+  past_projects?: Array<{ name: string; description: string; link?: string }>;
 }
 
 export interface PromptInput {
@@ -240,6 +240,7 @@ ${toneInstruction}`;
   // Build past work context for the about section
   const pastWorkContext = profile.past_projects?.length
     ? `Past projects (use these to make the about section specific):
+<<<<<<< HEAD
 ${profile.past_projects.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
     : 'No past projects provided — write the about section based on services and bio only.';
 
@@ -247,6 +248,18 @@ ${profile.past_projects.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
     ? `Portfolio links (reference naturally in the about section if relevant):
 ${profile.portfolio_links.join('\n')}`
     : 'No portfolio links provided.';
+=======
+${profile.past_projects.map((p, i) => {
+  const parts = [`${i + 1}. ${p.name}: ${p.description}`];
+  if (p.link) parts.push(`   Link: ${p.link}`);
+  return parts.join('\n');
+}).join('\n')}`
+    : 'No past projects provided — write the about section based on services and bio only.';
+
+  const portfolioContext = profile.portfolio_url
+    ? `Portfolio website: ${profile.portfolio_url} (reference naturally in the about section if relevant)`
+    : 'No portfolio URL provided.';
+>>>>>>> 948a3ce (feat: structured portfolio & past projects with Recent Work on proposals)
 
   const pricingContext = buildPricingContext(
     input.budget,

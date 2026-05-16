@@ -158,6 +158,8 @@ export interface ProposalTemplateProps {
     services: string[];
     logoUrl: string | null;
     brandColor: string;
+    portfolioUrl: string | null;
+    pastProjects: Array<{ name: string; description: string; link?: string }>;
   };
   theme: ThemeVariables;
   isPdf?: boolean;

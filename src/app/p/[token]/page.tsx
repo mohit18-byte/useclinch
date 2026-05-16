@@ -58,7 +58,7 @@ export default async function HostedProposalPage({ params }: PageProps) {
   // Fetch freelancer profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, bio, services, logo_url, brand_color, professional_title, stripe_connect_onboarded')
+    .select('full_name, bio, services, logo_url, brand_color, professional_title, stripe_connect_onboarded, portfolio_url, past_projects')
     .eq('id', proposal.user_id)
     .single();
 
@@ -95,6 +95,8 @@ export default async function HostedProposalPage({ params }: PageProps) {
     services: profile.services || [],
     logoUrl: profile.logo_url,
     brandColor: profile.brand_color || '#5e6ad2',
+    portfolioUrl: profile.portfolio_url || null,
+    pastProjects: Array.isArray(profile.past_projects) ? profile.past_projects : [],
   };
 
   const isAccepted = proposal.status === 'accepted';

@@ -34,6 +34,16 @@ function formatDate(iso: string) {
   });
 }
 
+/** Strips protocol + www for a clean link label, e.g. github.com/rohit */
+function formatAmLinkLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.hostname + u.pathname).replace(/^www\./, '').replace(/\/$/, '');
+  } catch {
+    return url;
+  }
+}
+
 /* ── useInView hook ──────────────────────────────────────────── */
 function useInView(options?: IntersectionObserverInit) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -425,6 +435,84 @@ const PricingSection = React.memo(function PricingSection({
 
 const AboutSection = React.memo(function AboutSection({ data, profile, isPdf }: { data: AboutData; profile: ProposalTemplateProps['profile']; isPdf?: boolean }) {
   const initial = profile.fullName?.charAt(0) || data.headline.charAt(0);
+
+  const renderCard = () => (
+    <div className="tpl-am__about-card">
+      <div className="tpl-am__about-header">
+        {profile.logoUrl ? (
+          <img src={profile.logoUrl} alt={profile.fullName} className="tpl-am__about-avatar-img" />
+        ) : (
+          <div className="tpl-am__about-avatar">{initial}</div>
+        )}
+        <div className="tpl-am__about-identity">
+          <h3 className="tpl-am__about-name">{profile.fullName}</h3>
+          {profile.professionalTitle && (
+            <p className="tpl-am__about-title">{profile.professionalTitle}</p>
+          )}
+        </div>
+      </div>
+      <p className="tpl-am__body" style={{ marginTop: '1.5rem' }}>{data.body}</p>
+      {profile.services && profile.services.length > 0 && (
+        <div className="tpl-am__about-services">
+          {profile.services.map((s, i) => (
+            <span key={i} className="tpl-am__about-service-pill">{s}</span>
+          ))}
+        </div>
+      )}
+
+      {/* ── Selected Work ───────────────────────────────────────── */}
+      {profile.pastProjects && profile.pastProjects.length > 0 && (
+        <div className="tpl-am__about-work">
+          <span className="tpl-am__about-work-label">Recent Work</span>
+          <div className="tpl-am__about-work-list">
+            {profile.pastProjects.map((proj, i) => {
+              const Tag = proj.link ? 'a' : 'div';
+              const linkProps = proj.link
+                ? { href: proj.link, target: '_blank', rel: 'noopener noreferrer' }
+                : {};
+              return (
+                <Tag
+                  key={i}
+                  className={`tpl-am__about-work-row${proj.link ? ' tpl-am__about-work-row--linked' : ''}`}
+                  {...linkProps}
+                >
+                  <span className="tpl-am__about-work-name">
+                    {proj.name}
+                    {proj.link && (
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true" className="tpl-am__about-work-icon">
+                        <path d="M2 10L10 2M10 2H4.5M10 2V7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                  <span className="tpl-am__about-work-desc">{proj.description}</span>
+                </Tag>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {profile.portfolioUrl && (
+        <div className="tpl-am__about-links">
+          <span className="tpl-am__about-links-label">Portfolio</span>
+          <div className="tpl-am__about-links-row">
+            <a
+              href={profile.portfolioUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="tpl-am__about-link"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <path d="M2 10L10 2M10 2H4.5M10 2V7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {formatAmLinkLabel(profile.portfolioUrl)}
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <section className="tpl-am__section tpl-am__section--alt" data-section="about">
       <div className="tpl-am__section-inner">
@@ -434,61 +522,14 @@ const AboutSection = React.memo(function AboutSection({ data, profile, isPdf }: 
         {isPdf ? <h2 className="tpl-am__title">{data.headline}</h2> : (
           <Reveal delay={80}><h2 className="tpl-am__title">{data.headline}</h2></Reveal>
         )}
-        {isPdf ? (
-          <div className="tpl-am__about-card">
-            <div className="tpl-am__about-header">
-              {profile.logoUrl ? (
-                <img src={profile.logoUrl} alt={profile.fullName} className="tpl-am__about-avatar-img" />
-              ) : (
-                <div className="tpl-am__about-avatar">{initial}</div>
-              )}
-              <div className="tpl-am__about-identity">
-                <h3 className="tpl-am__about-name">{profile.fullName}</h3>
-                {profile.professionalTitle && (
-                  <p className="tpl-am__about-title">{profile.professionalTitle}</p>
-                )}
-              </div>
-            </div>
-            <p className="tpl-am__body" style={{ marginTop: '1.5rem' }}>{data.body}</p>
-            {profile.services && profile.services.length > 0 && (
-              <div className="tpl-am__about-services">
-                {profile.services.map((s, i) => (
-                  <span key={i} className="tpl-am__about-service-pill">{s}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <Reveal delay={160}>
-            <div className="tpl-am__about-card">
-              <div className="tpl-am__about-header">
-                {profile.logoUrl ? (
-                  <img src={profile.logoUrl} alt={profile.fullName} className="tpl-am__about-avatar-img" />
-                ) : (
-                  <div className="tpl-am__about-avatar">{initial}</div>
-                )}
-                <div className="tpl-am__about-identity">
-                  <h3 className="tpl-am__about-name">{profile.fullName}</h3>
-                  {profile.professionalTitle && (
-                    <p className="tpl-am__about-title">{profile.professionalTitle}</p>
-                  )}
-                </div>
-              </div>
-              <p className="tpl-am__body" style={{ marginTop: '1.5rem' }}>{data.body}</p>
-              {profile.services && profile.services.length > 0 && (
-                <div className="tpl-am__about-services">
-                  {profile.services.map((s, i) => (
-                    <span key={i} className="tpl-am__about-service-pill">{s}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Reveal>
+        {isPdf ? renderCard() : (
+          <Reveal delay={160}>{renderCard()}</Reveal>
         )}
       </div>
     </section>
   );
 });
+
 
 const FAQSection = React.memo(function FAQSection({ data, isPdf }: { data: FAQData; isPdf?: boolean }) {
   const [openIndex, setOpenIndex] = React.useState<number | null>(isPdf ? -1 : null);
@@ -1054,6 +1095,97 @@ const APPLE_MINIMAL_CSS = `
     padding: 0.3rem 0.85rem; border-radius: 999px;
     border: 1px solid var(--proposal-border);
     background: transparent; letter-spacing: -0.005em;
+  }
+
+  /* ── ABOUT — selected work table ───────────────────────────── */
+  .tpl-am__about-work {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--proposal-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .tpl-am__about-work-label {
+    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--proposal-text-muted);
+  }
+  .tpl-am__about-work-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.1rem;
+  }
+  .tpl-am__about-work-row {
+    display: grid;
+    grid-template-columns: minmax(0, 9.5rem) 1fr;
+    gap: 1.25rem;
+    padding: 0.65rem 0;
+    border-top: 1px solid var(--proposal-border);
+    align-items: center;
+    text-decoration: none;
+  }
+  .tpl-am__about-work-row:first-child { border-top: none; }
+  .tpl-am__about-work-row--linked { cursor: pointer; }
+  .tpl-am__about-work-name {
+    font-size: 0.82rem; font-weight: 560;
+    color: var(--proposal-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 0.35rem;
+    letter-spacing: -0.01em;
+    transition: color 0.15s;
+  }
+  .tpl-am__about-work-icon {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--proposal-accent);
+  }
+  .tpl-am__about-work-row--linked:hover .tpl-am__about-work-name {
+    color: var(--proposal-accent);
+  }
+  .tpl-am__about-work-row--linked:hover .tpl-am__about-work-icon {
+    opacity: 1;
+  }
+  .tpl-am__about-work-desc {
+    font-size: 0.79rem;
+    color: var(--proposal-text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: -0.005em;
+    line-height: 1.4;
+  }
+
+  /* ── ABOUT — portfolio links ─────────────────────────────────── */
+  .tpl-am__about-links {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--proposal-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .tpl-am__about-links-label {
+    font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--proposal-text-muted);
+  }
+  .tpl-am__about-links-row {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .tpl-am__about-link {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.8rem; font-weight: 500;
+    color: var(--proposal-accent);
+    padding: 0.3rem 0.85rem; border-radius: 999px;
+    border: 1px solid var(--proposal-accent);
+    background: transparent;
+    text-decoration: none;
+    letter-spacing: -0.005em;
+    transition: background 0.18s ease, color 0.18s ease;
+    opacity: 0.85;
+  }
+  .tpl-am__about-link:hover {
+    background: var(--proposal-accent);
+    color: var(--proposal-accent-fg);
+    opacity: 1;
   }
 
   /* ── FAQ ──────────────────────────────────────────────────────── */

@@ -106,6 +106,8 @@ export async function POST(request: Request) {
         bio: profile.bio,
         services: profile.services || [],
         hourly_rate: profile.hourly_rate,
+        portfolio_url: profile.portfolio_url || null,
+        past_projects: profile.past_projects || [],
       }
     );
 

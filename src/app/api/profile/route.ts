@@ -64,6 +64,8 @@ export async function PATCH(request: Request) {
       "brand_color",
       "onboarding_completed",
       "default_payment_instructions",
+      "portfolio_url",
+      "past_projects",
     ];
 
     const updates: Record<string, unknown> = {};
@@ -90,8 +92,9 @@ export async function PATCH(request: Request) {
       .single();
 
     if (error) {
+      console.error('[PATCH /api/profile] Supabase error:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { error: "Failed to update profile", code: "INTERNAL_ERROR" },
+        { error: `Failed to update profile: ${error.message}`, code: "INTERNAL_ERROR" },
         { status: 500 }
       );
     }

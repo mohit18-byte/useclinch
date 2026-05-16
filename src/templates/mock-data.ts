@@ -141,4 +141,6 @@ export const MOCK_PROFILE: ProposalTemplateProps['profile'] = {
   services: ['Web Design', 'Front-End Development', 'SEO', 'CMS Integration'],
   logoUrl: null,
   brandColor: '#5e6ad2',
+  portfolioUrl: null,
+  pastProjects: [],
 };

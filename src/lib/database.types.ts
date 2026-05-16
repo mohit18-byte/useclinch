@@ -23,6 +23,12 @@ export interface Profile {
   logo_url: string | null;
   brand_color: string;
   professional_title: string | null;
+  portfolio_url: string | null;          // single portfolio/website URL
+  past_projects: Array<{                  // structured past work (jsonb in DB)
+    name: string;
+    description: string;
+    link?: string;
+  }>;
   onboarding_completed: boolean;
   stripe_customer_id: string | null;
   stripe_connect_account_id: string | null;
