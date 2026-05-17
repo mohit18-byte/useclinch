@@ -110,7 +110,7 @@ export default function NewProposalPage() {
       }
 
       const proposal = await res.json();
-      router.push(`/proposals/${proposal.id}`);
+      router.push(`/proposals/${proposal.id}/edit`);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
