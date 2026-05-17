@@ -164,7 +164,7 @@ OUTPUT JSON STRUCTURE:
   },
   "about": {
     "headline": "string — section heading",
-    "body": "string — 2-3 sentences written in first person. Must reference actual past work or specific skills from the profile. No adjectives without evidence. If portfolio links are provided, reference them naturally."
+    "body": "string — 2-3 sentences written in first person. Must reference actual past work by name or specific skills from the profile. No adjectives without evidence. Do NOT mention portfolio links, project URLs, or phrases like 'my portfolio is available at' — links are displayed separately in the proposal UI."
   },
   "faq": {
     "headline": "string — section heading",
@@ -239,15 +239,15 @@ ${toneInstruction}`;
 
   // Build past work context for the about section
   const pastWorkContext = profile.past_projects?.length
-    ? `Past projects (use these to make the about section specific):\n${profile.past_projects.map((p, i) => {
+    ? `Past projects — use these to write a specific, grounded About section paragraph. Reference project names and what was built naturally in the text. DO NOT include links or URLs in the paragraph — they are shown separately in the proposal UI.
+${profile.past_projects.map((p, i) => {
         const parts = [`${i + 1}. ${p.name}: ${p.description}`];
-        if (p.link) parts.push(`   Link: ${p.link}`);
         return parts.join('\n');
       }).join('\n')}`
     : 'No past projects provided — write the about section based on services and bio only.';
 
   const portfolioContext = profile.portfolio_url
-    ? `Portfolio website: ${profile.portfolio_url} (reference naturally in the about section if relevant)`
+    ? `The freelancer has a portfolio at ${profile.portfolio_url}. DO NOT mention this URL or any link in the about section paragraph — it is already displayed as a clickable button in the proposal. Write the paragraph as if the portfolio does not need to be referenced in text.`
     : 'No portfolio URL provided.';
 
   const pricingContext = buildPricingContext(
