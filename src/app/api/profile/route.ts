@@ -64,6 +64,7 @@ export async function PATCH(request: Request) {
       "brand_color",
       "onboarding_completed",
       "default_payment_instructions",
+      "default_currency",
       "portfolio_url",
       "past_projects",
     ];

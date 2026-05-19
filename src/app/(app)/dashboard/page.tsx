@@ -7,20 +7,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText,
   Receipt,
-  TrendingUp,
   ArrowUpRight,
   Plus,
   Clock,
   Users,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 
 /* ── Types ─────────────────────────────────────────────────── */
 interface DashboardData {
-  proposalsSent: number;
   proposalsTotal: number;
-  winRate: number;
-  revenueThisMonth: number;
+  activeProposals: number;   // sent + viewed (in-flight, client has access)
   unpaidCount: number;
   unpaidTotal: number;
   clientCount: number;
@@ -35,7 +33,7 @@ interface ActivityItem {
   time: string;
 }
 
-function fmt(cents: number) {
+function fmtCents(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -179,7 +177,7 @@ export default function DashboardPage() {
     !loading &&
     data &&
     data.proposalsTotal === 0 &&
-    data.revenueThisMonth === 0;
+    data.unpaidCount === 0;
 
   return (
     <div>
@@ -204,36 +202,30 @@ export default function DashboardPage() {
 
       {/* Stat cards */}
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatSkeleton />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatSkeleton />
           <StatSkeleton />
           <StatSkeleton />
         </div>
       ) : data ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
-            label="Proposals Sent"
-            value={data.proposalsSent.toString()}
+            label="All Proposals"
+            value={data.proposalsTotal.toString()}
             icon={FileText}
-            sub={`${data.proposalsTotal} total`}
+            sub="created all time"
           />
           <StatCard
-            label="Win Rate"
-            value={data.winRate > 0 ? `${data.winRate}%` : "—"}
-            icon={TrendingUp}
-            sub="accepted / decided"
-          />
-          <StatCard
-            label="Revenue"
-            value={data.revenueThisMonth > 0 ? fmt(data.revenueThisMonth) : "$0"}
-            icon={Receipt}
-            sub="paid this month"
+            label="Active Now"
+            value={data.activeProposals > 0 ? data.activeProposals.toString() : "—"}
+            icon={Zap}
+            sub="sent or viewed by client"
+            accent={data.activeProposals > 0 ? "text-indigo-400" : undefined}
           />
           {data.unpaidCount > 0 ? (
             <StatCard
               label="Unpaid"
-              value={fmt(data.unpaidTotal)}
+              value={fmtCents(data.unpaidTotal)}
               icon={AlertTriangle}
               sub={`${data.unpaidCount} invoice${data.unpaidCount !== 1 ? "s" : ""} outstanding`}
               accent="text-amber-400"
@@ -314,7 +306,7 @@ export default function DashboardPage() {
             href="/settings/profile"
             icon={ArrowUpRight}
             label="Profile Settings"
-            description="Update your branding and rate"
+            description="Update your branding and portfolio"
           />
         </div>
       </div>

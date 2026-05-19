@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Plus, Upload, Save, Loader2 } from "lucide-react";
+import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 
 interface PastProject {
   name: string;
@@ -24,6 +25,7 @@ interface Profile {
   logo_url: string | null;
   subscription_tier: string;
   default_payment_instructions: string;
+  default_currency: string;
   portfolio_url: string | null;  // single URL
   past_projects: PastProject[];  // structured work history
 }
@@ -53,6 +55,7 @@ export default function SettingsProfilePage() {
     logo_url: null,
     subscription_tier: "free",
     default_payment_instructions: "",
+    default_currency: "USD",
     portfolio_url: null,
     past_projects: [],
   });
@@ -73,6 +76,7 @@ export default function SettingsProfilePage() {
           logo_url: data.logo_url,
           subscription_tier: data.subscription_tier || "free",
           default_payment_instructions: data.default_payment_instructions || "",
+          default_currency: data.default_currency || "USD",
           portfolio_url: data.portfolio_url || null,
           past_projects: Array.isArray(data.past_projects) ? data.past_projects : [],
         });
@@ -169,6 +173,7 @@ export default function SettingsProfilePage() {
           brand_color: profile.brand_color,
           logo_url: profile.logo_url,
           default_payment_instructions: profile.default_payment_instructions || null,
+          default_currency: profile.default_currency || 'USD',
           portfolio_url: profile.portfolio_url || null,
           past_projects: profile.past_projects,
         }),
@@ -315,34 +320,6 @@ export default function SettingsProfilePage() {
                   ))}
                 </div>
               )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-[12px] text-[#8a8f98]">
-                Hourly rate (USD)
-              </Label>
-              <div className="relative max-w-[200px]">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#62666d]">
-                  $
-                </span>
-                <Input
-                  type="number"
-                  value={
-                    profile.hourly_rate != null
-                      ? (profile.hourly_rate / 100).toString()
-                      : ""
-                  }
-                  onChange={(e) =>
-                    update({
-                      hourly_rate: e.target.value
-                        ? Math.round(parseFloat(e.target.value) * 100)
-                        : null,
-                    })
-                  }
-                  placeholder="100"
-                  className="h-10 rounded-md border border-[#23252a] bg-[#08090a] pl-7 text-[14px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
-                />
-              </div>
             </div>
           </div>
         </div>
@@ -512,6 +489,34 @@ export default function SettingsProfilePage() {
                 />
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Default Currency */}
+        <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-6">
+          <h2 className="mb-1 text-[14px] font-[520] text-white">Default Currency</h2>
+          <p className="mb-4 text-[12px] text-[#62666d]">
+            Pre-selected when creating new proposals and invoices. You can always change it per document.
+          </p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {SUPPORTED_CURRENCIES.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => update({ default_currency: c.code })}
+                className={`flex flex-col items-center gap-1 rounded-lg border px-3 py-2.5 text-center transition-all ${
+                  profile.default_currency === c.code
+                    ? 'border-[#5e6ad2] bg-[#5e6ad2]/10'
+                    : 'border-[#1a1c20] bg-[#08090a] hover:border-[#23252a]'
+                }`}
+              >
+                <span className="text-base">{c.flag}</span>
+                <span className={`text-[12px] font-[600] ${
+                  profile.default_currency === c.code ? 'text-[#818cf8]' : 'text-[#8a8f98]'
+                }`}>{c.code}</span>
+                <span className="text-[10px] text-[#3a3f45] leading-tight">{c.symbol}</span>
+              </button>
+            ))}
           </div>
         </div>
 

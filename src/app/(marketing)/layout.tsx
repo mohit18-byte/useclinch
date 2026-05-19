@@ -234,18 +234,18 @@ function Footer() {
           © {new Date().getFullYear()} Clinch. All rights reserved.
         </p>
         <div className="flex gap-6">
-          <a
-            href="#"
+          <Link
+            href="/privacy"
             className="text-[13px] text-text-quaternary hover:text-text-secondary transition-colors"
           >
             Privacy Policy
-          </a>
-          <a
-            href="#"
+          </Link>
+          <Link
+            href="/terms"
             className="text-[13px] text-text-quaternary hover:text-text-secondary transition-colors"
           >
             Terms of Service
-          </a>
+          </Link>
         </div>
       </div>
     </footer>

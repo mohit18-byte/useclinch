@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useProposalEditor } from '@/store/proposal-editor';
 import { TEMPLATE_REGISTRY, resolveTemplate } from '@/templates/registry';
@@ -21,6 +22,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import React from 'react';
 
 // ── Section display names ──
 const SECTION_NAMES: Record<SectionKey, string> = {
@@ -97,6 +99,12 @@ export default function EditorSidebar({ proposalMeta, isLocked = false }: Editor
       <div className="ed-sidebar__group">
         <h3 className="ed-sidebar__group-title">Proposal Expiry</h3>
         <ExpiryPicker />
+      </div>
+
+      {/* Advance Payment */}
+      <div className="ed-sidebar__group">
+        <h3 className="ed-sidebar__group-title">Advance Payment</h3>
+        <AdvancePaymentPanel proposalMeta={proposalMeta} />
       </div>
 
       {/* Version History + Publish — commented out, will tackle later
@@ -709,6 +717,249 @@ function ExpiryPicker() {
           Expires: {expiryDisplay}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Advance Payment Panel ──────────────────────────────────────
+function AdvancePaymentPanel({ proposalMeta }: { proposalMeta: { projectTitle: string; clientName: string; clientEmail: string; amount: number; currency: string; createdAt: string } }) {
+  const proposalId = useProposalEditor((s) => s.proposalId);
+
+  // Local state — loaded from DB on mount
+  const [enabled, setEnabled] = useState(false);
+  const [amountType, setAmountType] = useState<'percent' | 'fixed'>('percent');
+  const [percent, setPercent] = useState<string>('50');
+  const [fixedAmount, setFixedAmount] = useState<string>('');
+  const [paymentType, setPaymentType] = useState<'instructions' | 'link'>('instructions');
+  const [value, setValue] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load existing values from the proposal
+  useEffect(() => {
+    if (!proposalId || loaded) return;
+    fetch(`/api/proposals/${proposalId}`)
+      .then((r) => r.json())
+      .then((p) => {
+        if (p.advance_payment_enabled) setEnabled(true);
+        if (p.advance_payment_type) setPaymentType(p.advance_payment_type);
+        if (p.advance_payment_value) setValue(p.advance_payment_value);
+        if (p.advance_payment_percent != null) {
+          setAmountType('percent');
+          setPercent(String(p.advance_payment_percent));
+        } else if (p.advance_payment_amount != null) {
+          setAmountType('fixed');
+          setFixedAmount(String(p.advance_payment_amount / 100));
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [proposalId, loaded]);
+
+  const save = useCallback(async (patch: Record<string, unknown>) => {
+    if (!proposalId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error('Failed to save advance payment settings');
+    } finally {
+      setSaving(false);
+    }
+  }, [proposalId]);
+
+  function handleToggle() {
+    const next = !enabled;
+    setEnabled(next);
+    save({ advance_payment_enabled: next });
+  }
+
+  function handleSaveAll() {
+    const patch: Record<string, unknown> = {
+      advance_payment_enabled: enabled,
+      advance_payment_type: paymentType,
+      advance_payment_value: value.trim() || null,
+      advance_payment_amount: null,
+      advance_payment_percent: null,
+    };
+    if (amountType === 'percent') {
+      patch.advance_payment_percent = Math.min(100, Math.max(1, parseInt(percent) || 50));
+    } else {
+      patch.advance_payment_amount = Math.round(parseFloat(fixedAmount || '0') * 100);
+    }
+    save(patch).then(() => toast.success('Advance payment settings saved'));
+  }
+
+  // Compute preview amount
+  const previewAmount = (() => {
+    const total = proposalMeta.amount || 0;
+    if (amountType === 'percent') {
+      const pct = parseInt(percent) || 0;
+      return total > 0 ? Math.round(total * pct / 100) : null;
+    } else {
+      const fixed = Math.round(parseFloat(fixedAmount || '0') * 100);
+      return fixed > 0 ? fixed : null;
+    }
+  })();
+
+  const fmt = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: proposalMeta.currency?.toUpperCase() || 'USD' }).format(cents / 100);
+
+  return (
+    <div>
+      {/* Toggle row */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[13px] font-[520] text-[#c9cdd3]">Request advance payment</p>
+          <p className="text-[11px] text-[#3a3f45] mt-0.5">Client must pay before accepting</p>
+        </div>
+        <button
+          onClick={handleToggle}
+          className="relative flex-shrink-0"
+          style={{ width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', background: enabled ? '#6366f1' : '#23252a', transition: 'background 0.22s', padding: 0 }}
+          aria-label={enabled ? 'Disable advance payment' : 'Enable advance payment'}
+        >
+          <motion.span
+            animate={{ x: enabled ? 16 : 2 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+            style={{
+              display: 'block', width: 16, height: 16, borderRadius: '50%',
+              background: '#fff', position: 'absolute', top: 2,
+            }}
+          />
+        </button>
+      </div>
+
+      {/* Collapsible panel */}
+      <AnimatePresence>
+        {enabled && (
+          <motion.div
+            key="ap-panel"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="space-y-3">
+
+              {/* Amount type */}
+              <div>
+                <p className="text-[11px] font-[600] uppercase tracking-wider text-[#3a3f45] mb-1.5">Amount</p>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  {(['percent', 'fixed'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setAmountType(t)}
+                      className={`rounded-md py-1.5 text-[12px] font-[520] transition-all border ${
+                        amountType === t
+                          ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#c9cdd3]'
+                          : 'border-[#1a1c20] bg-[#08090a] text-[#62666d] hover:border-[#23252a] hover:text-[#8a8f98]'
+                      }`}
+                      style={{ fontFamily: 'inherit' }}
+                    >
+                      {t === 'percent' ? 'Percentage' : 'Fixed Amount'}
+                    </button>
+                  ))}
+                </div>
+
+                {amountType === 'percent' ? (
+                  <div className="relative">
+                    <input
+                      type="number" min={1} max={100}
+                      value={percent}
+                      onChange={(e) => setPercent(e.target.value)}
+                      className="w-full rounded-md border border-[#1a1c20] bg-[#08090a] px-3 py-2 pr-8 text-[13px] text-white outline-none focus:border-[#3a3f45] transition-colors"
+                      style={{ fontFamily: 'inherit' }}
+                      placeholder="50"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#3a3f45]">%</span>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#3a3f45]">
+                      {proposalMeta.currency?.toUpperCase() === 'INR' ? '₹' : '$'}
+                    </span>
+                    <input
+                      type="number" min={0}
+                      value={fixedAmount}
+                      onChange={(e) => setFixedAmount(e.target.value)}
+                      className="w-full rounded-md border border-[#1a1c20] bg-[#08090a] pl-7 pr-3 py-2 text-[13px] text-white outline-none focus:border-[#3a3f45] transition-colors"
+                      style={{ fontFamily: 'inherit' }}
+                      placeholder="5000"
+                    />
+                  </div>
+                )}
+
+                {/* Amount preview */}
+                {previewAmount && previewAmount > 0 && (
+                  <p className="mt-1.5 text-[11px] text-[#6366f1] font-[500]">
+                    Client pays {fmt(previewAmount)} upfront
+                  </p>
+                )}
+              </div>
+
+              {/* Payment method */}
+              <div>
+                <p className="text-[11px] font-[600] uppercase tracking-wider text-[#3a3f45] mb-1.5">Payment Method</p>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  {(['instructions', 'link'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setPaymentType(t)}
+                      className={`rounded-md py-1.5 text-[12px] font-[520] transition-all border ${
+                        paymentType === t
+                          ? 'border-[#6366f1] bg-[#6366f1]/10 text-[#c9cdd3]'
+                          : 'border-[#1a1c20] bg-[#08090a] text-[#62666d] hover:border-[#23252a] hover:text-[#8a8f98]'
+                      }`}
+                      style={{ fontFamily: 'inherit' }}
+                    >
+                      {t === 'instructions' ? 'Instructions' : 'Payment Link'}
+                    </button>
+                  ))}
+                </div>
+
+                {paymentType === 'instructions' ? (
+                  <textarea
+                    rows={3}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder="e.g. UPI ID: 9327603241@ybl&#10;Bank: HDFC — Acc: 50100...&#10;SWIFT: HDFCINBB"
+                    className="w-full resize-none rounded-md border border-[#1a1c20] bg-[#08090a] px-3 py-2 text-[12px] text-[#c9cdd3] outline-none focus:border-[#3a3f45] placeholder:text-[#3a3f45] transition-colors"
+                    style={{ fontFamily: 'inherit' }}
+                  />
+                ) : (
+                  <input
+                    type="url"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder="https://buy.stripe.com/..."
+                    className="w-full rounded-md border border-[#1a1c20] bg-[#08090a] px-3 py-2 text-[12px] text-[#c9cdd3] outline-none focus:border-[#3a3f45] placeholder:text-[#3a3f45] transition-colors"
+                    style={{ fontFamily: 'inherit' }}
+                  />
+                )}
+              </div>
+
+              {/* Save */}
+              <button
+                onClick={handleSaveAll}
+                disabled={saving}
+                className="w-full rounded-md py-2 text-[12px] font-[550] text-white transition-all disabled:opacity-50"
+                style={{
+                  fontFamily: 'inherit',
+                  background: saving ? '#374151' : '#6366f1',
+                }}
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

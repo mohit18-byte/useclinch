@@ -15,7 +15,6 @@ interface ProfileData {
   professional_title: string;
   bio: string;
   services: string[];
-  hourly_rate: string;
   brand_color: string;
   logo_url: string | null;
 }
@@ -128,7 +127,7 @@ function Step2({
           What do you do?
         </h2>
         <p className="mt-1 text-[13px] text-[#8a8f98]">
-          Add your services and set your hourly rate.
+          Add the services you offer.
         </p>
       </div>
 
@@ -174,23 +173,6 @@ function Step2({
         )}
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-[12px] text-[#8a8f98]">
-          Hourly rate (USD)
-        </Label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-[#62666d]">
-            $
-          </span>
-          <Input
-            type="number"
-            placeholder="100"
-            value={data.hourly_rate}
-            onChange={(e) => onChange({ hourly_rate: e.target.value })}
-            className="h-10 rounded-md border border-[#23252a] bg-[#08090a] pl-7 text-[14px] text-white placeholder:text-[#62666d] focus:border-[#3a3f45] focus:ring-0"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -356,10 +338,6 @@ function Step4({ data }: { data: ProfileData }) {
                 ))
               : <span className="text-[13px] text-[#62666d]">—</span>}
           </div>
-          <p className="text-[12px] text-[#62666d] mt-3 mb-1">Hourly rate</p>
-          <p className="text-[14px] text-white">
-            {data.hourly_rate ? `$${data.hourly_rate}/hr` : "—"}
-          </p>
         </div>
 
         {/* Brand */}
@@ -406,7 +384,6 @@ export default function OnboardingPage() {
     professional_title: "",
     bio: "",
     services: [],
-    hourly_rate: "",
     brand_color: "#5e6ad2",
     logo_url: null,
   });
@@ -449,9 +426,6 @@ export default function OnboardingPage() {
           professional_title: data.professional_title || null,
           bio: data.bio,
           services: data.services,
-          hourly_rate: data.hourly_rate
-            ? Math.round(parseFloat(data.hourly_rate) * 100)
-            : null,
           brand_color: data.brand_color,
           logo_url: data.logo_url,
           onboarding_completed: true,

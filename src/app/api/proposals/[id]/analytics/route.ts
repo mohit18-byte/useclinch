@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
     // Verify ownership
     const { data: proposal, error: pError } = await admin
       .from('proposals')
-      .select('id, user_id, status, project_title, client_name, created_at, hosted_token, sections_config, signature_data, signer_name, signed_at')
+      .select('id, user_id, status, project_title, client_name, created_at, hosted_token, sections_config, signature_data, signer_name, signed_at, advance_payment_enabled, advance_payment_claimed, advance_payment_invoice_id, advance_payment_percent, advance_payment_amount, advance_payment_type, advance_payment_value, amount, currency')
       .eq('id', id)
       .single();
 
@@ -114,6 +114,16 @@ export async function GET(_request: Request, context: RouteContext) {
       .eq('proposal_id', id)
       .order('created_at', { ascending: false });
 
+    // Compute advance amount for display
+    let advanceAmountCents: number | null = null;
+    if (proposal.advance_payment_enabled) {
+      if (proposal.advance_payment_percent != null) {
+        advanceAmountCents = Math.round((proposal.amount ?? 0) * proposal.advance_payment_percent / 100);
+      } else if (proposal.advance_payment_amount != null) {
+        advanceAmountCents = proposal.advance_payment_amount;
+      }
+    }
+
     return NextResponse.json({
       proposal: {
         id: proposal.id,
@@ -122,6 +132,11 @@ export async function GET(_request: Request, context: RouteContext) {
         clientName: proposal.client_name,
         createdAt: proposal.created_at,
         hostedToken: proposal.hosted_token,
+        advancePaymentEnabled: proposal.advance_payment_enabled ?? false,
+        advancePaymentClaimed: proposal.advance_payment_claimed ?? false,
+        advancePaymentInvoiceId: proposal.advance_payment_invoice_id ?? null,
+        advanceAmountCents,
+        currency: proposal.currency ?? 'USD',
       },
       stats: {
         totalViews: clientViews.length,

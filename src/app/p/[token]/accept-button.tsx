@@ -39,6 +39,13 @@ interface AcceptButtonProps {
   expiresAt: string | null;
   signerName: string | null;
   signedAt: string | null;
+  // Advance payment
+  advancePaymentEnabled: boolean;
+  advancePaymentClaimed: boolean;
+  advancePaymentType: 'instructions' | 'link' | null;
+  advancePaymentValue: string | null;
+  advanceAmountCents: number | null;
+  currency: string;
 }
 
 export default function AcceptButton({
@@ -49,6 +56,12 @@ export default function AcceptButton({
   expiresAt,
   signerName: initialSignerName,
   signedAt: initialSignedAt,
+  advancePaymentEnabled,
+  advancePaymentClaimed: initialAdvanceClaimed,
+  advancePaymentType,
+  advancePaymentValue,
+  advanceAmountCents,
+  currency,
 }: AcceptButtonProps) {
   const [accepted, setAccepted] = useState(initialAccepted);
   const [confirming, setConfirming] = useState(false);
@@ -58,6 +71,14 @@ export default function AcceptButton({
   const [nameInput, setNameInput] = useState(clientName);
   const confettiRef = useRef<ConfettiRef>(null);
 
+  // Payment step state
+  const [step, setStep] = useState<'sign' | 'pay' | 'done'>('sign');
+  const [advanceClaimed, setAdvanceClaimed] = useState(initialAdvanceClaimed);
+  const [paymentChecked, setPaymentChecked] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [signatureDataForAccept, setSignatureDataForAccept] = useState<string | null>(null);
+  const [signerNameForAccept, setSignerNameForAccept] = useState<string>(clientName);
+
   // Signature canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
@@ -65,6 +86,9 @@ export default function AcceptButton({
 
   const isExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
   const { remaining: expiryRemaining, isUrgent: expiryUrgent } = useCountdown(expiresAt);
+
+  const fmtAmount = (cents: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() || 'USD' }).format(cents / 100);
 
   // ── Canvas drawing ──
   const initCanvas = useCallback(() => {
@@ -193,11 +217,49 @@ export default function AcceptButton({
     }, 500);
   }, []);
 
-  // ── Accept handler ──
-  async function handleAccept() {
+  // ── Sign handler — Step 1 ──
+  // If advance payment is enabled and not yet claimed → go to payment step
+  // Otherwise → accept immediately
+  async function handleSign() {
     const signatureData = getSignatureData();
-    if (!signatureData) return; // require signature
+    if (!signatureData) return;
 
+    // Store signature for use after payment step
+    if (advancePaymentEnabled && !advanceClaimed) {
+      setSignatureDataForAccept(signatureData);
+      setSignerNameForAccept(nameInput);
+      setStep('pay');
+      setConfirming(false);
+      return;
+    }
+
+    // No advance payment → accept directly
+    await submitAccept(signatureData, nameInput);
+  }
+
+  // ── Claim advance payment — Step 2 ──
+  async function handleClaimAdvance() {
+    if (!paymentChecked) return;
+    setPaymentLoading(true);
+    try {
+      const res = await fetch(`/api/hosted/${token}/claim-advance`, { method: 'POST' });
+      if (res.ok) {
+        setAdvanceClaimed(true);
+        setStep('done');
+        // Now submit the accept with the stored signature
+        if (signatureDataForAccept) {
+          await submitAccept(signatureDataForAccept, signerNameForAccept);
+        }
+      }
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
+  // ── Final accept API call ──
+  async function submitAccept(signatureData: string, name: string) {
     setLoading(true);
     try {
       const res = await fetch(`/api/hosted/${token}/accept`, {
@@ -205,13 +267,14 @@ export default function AcceptButton({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           signature_data: signatureData,
-          signer_name: nameInput,
+          signer_name: name,
         }),
       });
       if (res.ok) {
         setAccepted(true);
         setConfirming(false);
-        setSignerName(nameInput);
+        setStep('sign');
+        setSignerName(name);
         setSignedAt(new Date().toISOString());
         setTimeout(fireConfetti, 200);
       }
@@ -472,7 +535,7 @@ export default function AcceptButton({
                 Cancel
               </button>
               <button
-                onClick={handleAccept}
+                onClick={handleSign}
                 disabled={loading || !nameInput.trim()}
                 style={{
                   padding: '0.55rem 1.5rem',
@@ -487,7 +550,166 @@ export default function AcceptButton({
                   opacity: !nameInput.trim() ? 0.5 : 1,
                 }}
               >
-                {loading ? 'Signing...' : 'Sign & Accept'}
+                {loading ? 'Signing...' : advancePaymentEnabled && !advanceClaimed ? 'Sign & Continue →' : 'Sign & Accept'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Payment Step (Step 2) — only shown when advance payment is enabled and not yet claimed ──
+  if (step === 'pay' && advancePaymentEnabled && !advanceClaimed) {
+    const fontFamily = "'Inter Variable', -apple-system, system-ui, sans-serif";
+    return (
+      <>
+        <Confetti
+          ref={confettiRef}
+          manualstart
+          style={{ position: 'fixed', inset: 0, zIndex: 200, width: '100%', height: '100%', pointerEvents: 'none' }}
+        />
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          paddingBottom: '3rem',
+          background: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(6px)',
+          fontFamily,
+        }}>
+          <div style={{
+            background: '#18181b',
+            border: '1px solid rgba(251,191,36,0.2)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '480px',
+            width: '90%',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '8px',
+                background: 'rgba(251,191,36,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '1rem',
+              }}>
+                💰
+              </div>
+              <h3 style={{ color: '#f4f4f5', fontSize: '1.05rem', fontWeight: 600, margin: 0 }}>
+                Advance Payment Required
+              </h3>
+            </div>
+            <p style={{ color: '#a1a1aa', fontSize: '0.82rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+              {advanceAmountCents && advanceAmountCents > 0
+                ? <>The freelancer has requested an advance payment of <strong style={{ color: '#fbbf24' }}>{fmtAmount(advanceAmountCents)}</strong> before work begins.</>
+                : 'The freelancer has requested an advance payment before work begins.'
+              }
+            </p>
+
+            {/* Payment info */}
+            <div style={{
+              background: '#09090b',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '10px',
+              padding: '1rem',
+              marginBottom: '1.25rem',
+            }}>
+              {advancePaymentType === 'link' ? (
+                <>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+                    Payment Link
+                  </p>
+                  <a
+                    href={advancePaymentValue ?? '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.6rem 1.25rem',
+                      background: '#fbbf24',
+                      borderRadius: '8px',
+                      color: '#000',
+                      fontWeight: 700,
+                      fontSize: '0.88rem',
+                      textDecoration: 'none',
+                      fontFamily,
+                    }}
+                  >
+                    Pay Now →
+                  </a>
+                  <p style={{ fontSize: '0.72rem', color: '#52525b', marginTop: '0.75rem', lineHeight: 1.5 }}>
+                    Complete payment via the link above, then return to this page and confirm below.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                    Payment Instructions
+                  </p>
+                  <pre style={{
+                    fontSize: '0.82rem', color: '#d4d4d8', lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
+                    fontFamily,
+                  }}>
+                    {advancePaymentValue ?? 'No instructions provided.'}
+                  </pre>
+                </>
+              )}
+            </div>
+
+            {/* Declaration checkbox */}
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', marginBottom: '1.25rem' }}>
+              <input
+                type="checkbox"
+                checked={paymentChecked}
+                onChange={(e) => setPaymentChecked(e.target.checked)}
+                style={{ marginTop: '2px', accentColor: '#fbbf24', width: 15, height: 15, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: '0.78rem', color: '#a1a1aa', lineHeight: 1.5 }}>
+                I confirm I have initiated a payment of{' '}
+                <strong style={{ color: '#f4f4f5' }}>
+                  {advanceAmountCents && advanceAmountCents > 0 ? fmtAmount(advanceAmountCents) : 'the required amount'}
+                </strong>{' '}
+                as agreed in this proposal.
+              </span>
+            </label>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setStep('sign'); setConfirming(true); setPaymentChecked(false); }}
+                disabled={paymentLoading}
+                style={{
+                  padding: '0.55rem 1.25rem',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '8px',
+                  color: '#a1a1aa',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  fontFamily,
+                }}
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleClaimAdvance}
+                disabled={!paymentChecked || paymentLoading || loading}
+                style={{
+                  padding: '0.55rem 1.5rem',
+                  background: !paymentChecked || paymentLoading ? '#374151' : '#fbbf24',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#000',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: !paymentChecked || paymentLoading ? 'not-allowed' : 'pointer',
+                  fontFamily,
+                  opacity: !paymentChecked ? 0.5 : 1,
+                  transition: 'background 0.15s, opacity 0.15s',
+                }}
+              >
+                {paymentLoading || loading ? 'Processing...' : 'I Have Paid — Accept Proposal'}
               </button>
             </div>
           </div>

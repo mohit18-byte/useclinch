@@ -43,7 +43,7 @@ function Hero() {
             className="h-1.5 w-1.5 rounded-full animate-pulse"
             style={{ backgroundColor: "#e8a338" }}
           />
-          Now in public beta — free forever
+          Now in public beta
         </div>
 
         <h1 className="text-5xl font-medium leading-[1.04] tracking-display-lg text-text-primary md:text-[72px]">
@@ -724,7 +724,7 @@ const plans = [
     period: "forever",
     description: "For freelancers just getting started",
     features: [
-      "5 AI proposals per month",
+      "3 AI proposals per month",
       "Hosted proposal pages",
       "Invoice builder",
       "Client management",
@@ -876,7 +876,7 @@ function FinalCTA() {
           Ready to win your next client?
         </h2>
         <p className="mt-4 text-lg text-text-tertiary">
-          Join thousands of freelancers who close deals faster with Clinch.
+          Join freelancers who close deals faster with Clinch.
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">

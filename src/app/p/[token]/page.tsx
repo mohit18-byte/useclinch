@@ -101,6 +101,16 @@ export default async function HostedProposalPage({ params }: PageProps) {
 
   const isAccepted = proposal.status === 'accepted';
 
+  // Compute advance payment amount in cents for display
+  let advanceAmountCents: number | null = null;
+  if (proposal.advance_payment_enabled) {
+    if (proposal.advance_payment_percent != null) {
+      advanceAmountCents = Math.round((proposal.amount ?? 0) * proposal.advance_payment_percent / 100);
+    } else if (proposal.advance_payment_amount != null) {
+      advanceAmountCents = proposal.advance_payment_amount;
+    }
+  }
+
   // Fetch latest version info for change highlighting
   let changedSections: string[] = [];
   if ((proposal.current_version || 1) > 1) {
@@ -147,6 +157,12 @@ export default async function HostedProposalPage({ params }: PageProps) {
         expiresAt={proposal.expires_at || null}
         signerName={proposal.signer_name || null}
         signedAt={proposal.signed_at || null}
+        advancePaymentEnabled={proposal.advance_payment_enabled ?? false}
+        advancePaymentClaimed={proposal.advance_payment_claimed ?? false}
+        advancePaymentType={(proposal.advance_payment_type as 'instructions' | 'link' | null) ?? null}
+        advancePaymentValue={proposal.advance_payment_value ?? null}
+        advanceAmountCents={advanceAmountCents}
+        currency={proposal.currency ?? 'USD'}
       />
 
       {/* Comments panel — floating chat bubble */}

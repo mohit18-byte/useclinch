@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 const PROJECT_TYPES = [
   "Website",
@@ -53,7 +54,6 @@ export default function NewProposalPage() {
   const [projectType, setProjectType] = useState("");
   const [deliverables, setDeliverables] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [budget, setBudget] = useState("");
   const [timeline, setTimeline] = useState("");
 
   // Paste JD
@@ -61,6 +61,22 @@ export default function NewProposalPage() {
 
   // Tone
   const [tone, setTone] = useState<"formal" | "friendly" | "bold">("formal");
+
+  // Currency (pre-filled from profile default)
+  const [currency, setCurrency] = useState("USD");
+
+  // Pricing mode
+  const [pricingMode, setPricingMode] = useState<"fixed" | "hourly" | "estimate">("estimate");
+  const [budget, setBudget] = useState("");       // used when pricingMode = "fixed"
+  const [hourlyRate, setHourlyRate] = useState(""); // used when pricingMode = "hourly"
+
+  // Pre-load default currency from profile
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => r.ok ? r.json() : null)
+      .then((p) => { if (p?.default_currency) setCurrency(p.default_currency); })
+      .catch(() => {});
+  }, []);
 
   const resolvedClientName = client?.name || clientName;
 
@@ -72,9 +88,16 @@ export default function NewProposalPage() {
     setTagInput("");
   }
 
+  // Pricing validation: budget/rate required only when relevant mode is selected
+  const pricingValid =
+    pricingMode === "estimate" ||
+    (pricingMode === "fixed" && budget.trim() !== "" && parseFloat(budget) > 0) ||
+    (pricingMode === "hourly" && hourlyRate.trim() !== "" && parseFloat(hourlyRate) > 0);
+
   const canGenerate =
     resolvedClientName.trim() &&
-    (mode === "paste" ? jobDescription.trim() : projectType);
+    (mode === "paste" ? jobDescription.trim() : projectType) &&
+    pricingValid;
 
   async function handleGenerate() {
     if (!canGenerate) return;
@@ -92,9 +115,12 @@ export default function NewProposalPage() {
           client_company: client?.company || null,
           project_type: projectType || null,
           deliverables,
-          budget: budget || null,
           timeline: timeline || null,
           tone,
+          currency,
+          pricing_mode: pricingMode,
+          budget: pricingMode === "fixed" ? budget : undefined,
+          hourly_rate: pricingMode === "hourly" ? hourlyRate : undefined,
           job_description: mode === "paste" ? jobDescription : null,
         }),
       });
@@ -169,6 +195,115 @@ export default function NewProposalPage() {
           </div>
         </div>
 
+        {/* ── Currency & Pricing (always visible) ─────────────── */}
+        <div className="rounded-lg border border-[#1a1c20] bg-[#0c0d0e] p-5 space-y-5">
+          <h2 className="text-[13px] font-[520] text-[#8a8f98]">Currency & Pricing</h2>
+
+          {/* Currency picker */}
+          <div className="space-y-2">
+            <Label className="text-[12px] text-[#62666d]">Currency</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => setCurrency(c.code)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-[520] transition-all border ${
+                    currency === c.code
+                      ? "border-[#5e6ad2] bg-[#5e6ad2]/10 text-[#818cf8]"
+                      : "border-[#1a1c20] bg-[#08090a] text-[#8a8f98] hover:border-[#23252a] hover:text-white"
+                  }`}
+                >
+                  <span>{c.flag}</span>
+                  <span>{c.code}</span>
+                  <span className={`text-[10px] ${currency === c.code ? "text-[#818cf8]/60" : "text-[#3a3f45]"}`}>{c.symbol}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Pricing mode toggle */}
+          <div className="space-y-2">
+            <Label className="text-[12px] text-[#62666d]">How would you like to price this proposal?</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { mode: "fixed" as const, label: "Fixed Budget", desc: "Client has a set budget" },
+                { mode: "hourly" as const, label: "Bill Hourly", desc: "Enter your rate per hour" },
+                { mode: "estimate" as const, label: "AI Estimate", desc: "Let AI suggest a price" },
+              ].map((opt) => (
+                <button
+                  key={opt.mode}
+                  type="button"
+                  onClick={() => setPricingMode(opt.mode)}
+                  className={`rounded-md border p-3 text-left transition-all ${
+                    pricingMode === opt.mode
+                      ? "border-[#5e6ad2] bg-[#5e6ad2]/10"
+                      : "border-[#1a1c20] bg-[#08090a] hover:border-[#23252a]"
+                  }`}
+                >
+                  <p className={`text-[12px] font-[560] ${pricingMode === opt.mode ? "text-[#818cf8]" : "text-[#8a8f98]"}`}>
+                    {opt.label}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[#3a3f45] leading-snug">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conditional input — fixed budget */}
+          {pricingMode === "fixed" && (
+            <div className="space-y-1.5">
+              <Label className="text-[12px] text-[#62666d]">
+                Client budget <span className="text-red-400">*</span>
+                <span className="ml-1 text-[#3a3f45]">— the total the client is willing to pay</span>
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#3a3f45]">
+                  {getCurrencySymbol(currency)}
+                </span>
+                <Input
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  placeholder="500000"
+                  className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] pl-7 text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
+                />
+              </div>
+              <p className="text-[11px] text-[#3a3f45]">AI will scope deliverables to fit exactly this amount.</p>
+            </div>
+          )}
+
+          {/* Conditional input — hourly rate */}
+          {pricingMode === "hourly" && (
+            <div className="space-y-1.5">
+              <Label className="text-[12px] text-[#62666d]">
+                Your rate for this project <span className="text-red-400">*</span>
+              </Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#3a3f45]">
+                  {getCurrencySymbol(currency)}
+                </span>
+                <Input
+                  type="number"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  placeholder="3000"
+                  className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] pl-7 text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#3a3f45]">/hr</span>
+              </div>
+              <p className="text-[11px] text-[#3a3f45]">AI will estimate hours × your rate and show the math in the proposal.</p>
+            </div>
+          )}
+
+          {/* AI estimate — no input needed */}
+          {pricingMode === "estimate" && (
+            <p className="rounded-md border border-[#1a1c20] bg-[#08090a] px-3 py-2.5 text-[12px] text-[#62666d]">
+              AI will research a fair market rate in <span className="text-[#818cf8]">{currency}</span> for this type of project and explain its assumption in the proposal.
+            </p>
+          )}
+        </div>
+
         {/* Input Mode Toggle */}
         <div className="rounded-lg border border-[#1a1c20] bg-[#0c0d0e] p-5">
           <div className="mb-4 flex rounded-md border border-[#1a1c20] bg-[#08090a] p-0.5">
@@ -220,9 +355,7 @@ export default function NewProposalPage() {
 
               {/* Deliverables */}
               <div className="space-y-1.5">
-                <Label className="text-[12px] text-[#8a8f98]">
-                  Key deliverables
-                </Label>
+                <Label className="text-[12px] text-[#8a8f98]">Key deliverables</Label>
                 <div className="flex gap-2">
                   <Input
                     value={tagInput}
@@ -268,48 +401,40 @@ export default function NewProposalPage() {
                 )}
               </div>
 
-              {/* Budget + Timeline */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-[12px] text-[#8a8f98]">
-                    Budget (USD)
-                  </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#3a3f45]">
-                      $
-                    </span>
-                    <Input
-                      type="number"
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      placeholder="5000"
-                      className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] pl-7 text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[12px] text-[#8a8f98]">Timeline</Label>
-                  <Input
-                    value={timeline}
-                    onChange={(e) => setTimeline(e.target.value)}
-                    placeholder="e.g. 6 weeks"
-                    className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
-                  />
-                </div>
+              {/* Timeline */}
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-[#8a8f98]">Timeline <span className="text-[#3a3f45]">(optional)</span></Label>
+                <Input
+                  value={timeline}
+                  onChange={(e) => setTimeline(e.target.value)}
+                  placeholder="e.g. 6 weeks"
+                  className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
+                />
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              <Label className="text-[12px] text-[#8a8f98]">
-                Job description <span className="text-red-400">*</span>
-              </Label>
-              <Textarea
-                value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                rows={8}
-                placeholder="Paste the full job description here. The AI will extract project details, scope, and deliverables automatically..."
-                className="rounded-md border border-[#1a1c20] bg-[#08090a] text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0 resize-none"
-              />
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-[#8a8f98]">
+                  Job description <span className="text-red-400">*</span>
+                </Label>
+                <Textarea
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={8}
+                  placeholder="Paste the full job description here. AI will extract scope and deliverables automatically. Your pricing settings above override any budget mentioned in the JD."
+                  className="rounded-md border border-[#1a1c20] bg-[#08090a] text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0 resize-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[12px] text-[#8a8f98]">Timeline <span className="text-[#3a3f45]">(optional)</span></Label>
+                <Input
+                  value={timeline}
+                  onChange={(e) => setTimeline(e.target.value)}
+                  placeholder="e.g. 6 weeks"
+                  className="h-9 rounded-md border border-[#1a1c20] bg-[#08090a] text-[13px] text-white placeholder:text-[#3a3f45] focus:border-[#23252a] focus:ring-0"
+                />
+              </div>
             </div>
           )}
         </div>

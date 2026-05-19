@@ -4,6 +4,7 @@ import { getOpenAI } from "@/lib/openai";
 import { buildProposalPrompt } from "@/lib/proposal-prompt";
 import { validateProposalContent } from "@/lib/proposal-validator";
 import type { SectionsConfig } from "@/templates/types";
+import type { PricingMode } from "@/lib/proposal-prompt";
 
 const TIER_LIMITS: Record<string, number> = {
   free: 5,
@@ -87,8 +88,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    const currency = (body.currency as string)?.toUpperCase() || "USD";
+    const pricingMode: PricingMode = body.pricing_mode || "estimate";
 
-    // Build prompts using the new 10-section format
+    // Build prompts — v6 prompt auto-cleans JD and detects informal format
     const { systemPrompt, userPrompt } = buildProposalPrompt(
       {
         client_name: body.client_name,
@@ -97,15 +100,17 @@ export async function POST(request: Request) {
         project_type: body.project_type,
         job_description: body.job_description,
         deliverables: body.deliverables,
-        budget: body.budget,
         timeline: body.timeline,
         tone: body.tone,
+        currency,
+        pricing_mode: pricingMode,
+        budget: body.budget || undefined,
+        hourly_rate: body.hourly_rate || undefined,
       },
       {
         full_name: profile.full_name,
         bio: profile.bio,
         services: profile.services || [],
-        hourly_rate: profile.hourly_rate,
         portfolio_url: profile.portfolio_url || null,
         past_projects: profile.past_projects || [],
       }
@@ -127,6 +132,12 @@ export async function POST(request: Request) {
 
     const contentJson = contentResult.data!;
 
+    // ── Transform amounts ×100 before saving ────────────────────
+    // The AI returns human-readable whole numbers (e.g. 500000 for ₹5L).
+    // Our DB stores amounts in cents (×100). Transform here so all
+    // downstream code (display, invoices, analytics) stays unchanged.
+    const processedContent = transformPricingAmounts(contentJson);
+
     // Build project title
     const projectTitle =
       contentJson.cover.title ||
@@ -139,7 +150,7 @@ export async function POST(request: Request) {
     // Generate hosted token
     const hostedToken = crypto.randomUUID();
 
-    // Save to database with new column structure
+    // Save to database
     const { data: proposal, error } = await supabase
       .from("proposals")
       .insert({
@@ -156,20 +167,20 @@ export async function POST(request: Request) {
           ? Math.round(parseFloat(body.budget) * 100)
           : null,
         input_timeline: body.timeline || null,
-        // ── NEW: 10-section content ──
-        content_json: contentJson,
-        edited_content_json: structuredClone(contentJson),
+        content_json: processedContent,
+        edited_content_json: structuredClone(processedContent),
         sections_config: DEFAULT_SECTIONS_CONFIG,
         template_id: "dark-editorial",
         theme_id: "midnight",
         hosted_token: hostedToken,
-        // ──────────────────────────────
         status: "draft",
-        amount: contentJson.pricing.total || (body.budget
-          ? Math.round(parseFloat(body.budget) * 100)
-          : null),
-        currency: "usd",
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        amount:
+          processedContent.pricing.total ||
+          (body.budget ? Math.round(parseFloat(body.budget) * 100) : null),
+        currency: currency.toLowerCase(),
+        expires_at: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ).toISOString(),
       })
       .select()
       .single();
@@ -194,6 +205,8 @@ export async function POST(request: Request) {
 
 // ── Generate with retry ─────────────────────────────────────────
 // Calls OpenAI, validates with Zod. Retries once on failure.
+// V6: max_tokens raised to 6000 (prevents JSON truncation on complex JDs).
+//     temperature 0.45 first attempt, 0.3 on retry (tighter schema adherence).
 
 async function generateWithRetry(
   systemPrompt: string,
@@ -208,8 +221,8 @@ async function generateWithRetry(
       const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4o",
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 4000,
+        temperature: attempt === 0 ? 0.45 : 0.3,
+        max_tokens: 6000,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -244,4 +257,44 @@ async function generateWithRetry(
   }
 
   return { success: false, error: "Generation failed after 2 attempts" };
+}
+
+// ── Transform AI amounts ×100 ────────────────────────────────────
+// AI returns human-readable whole numbers (e.g. 500000 for ₹5L).
+// DB stores everything in cents (×100). This function converts the
+// AI's output before we save it, so all display code (÷100) is correct.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function transformPricingAmounts(contentJson: any): any {
+  const clone = structuredClone(contentJson);
+
+  if (clone?.pricing) {
+    // Multiply every lineItem amount
+    if (Array.isArray(clone.pricing.lineItems)) {
+      clone.pricing.lineItems = clone.pricing.lineItems.map(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (item: any) => ({
+          ...item,
+          amount:
+            typeof item.amount === "number"
+              ? Math.round(item.amount * 100)
+              : item.amount,
+        })
+      );
+    }
+
+    // Recompute total from transformed lineItems (don't trust AI's total)
+    if (Array.isArray(clone.pricing.lineItems)) {
+      clone.pricing.total = clone.pricing.lineItems.reduce(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (sum: number, item: any) =>
+          sum + (typeof item.amount === "number" ? item.amount : 0),
+        0
+      );
+    } else if (typeof clone.pricing.total === "number") {
+      clone.pricing.total = Math.round(clone.pricing.total * 100);
+    }
+  }
+
+  return clone;
 }

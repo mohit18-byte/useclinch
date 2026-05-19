@@ -39,36 +39,14 @@ export async function GET() {
     const clients = clientsRes.data || [];
 
     // ── Proposal stats ──────────────────────────────────────
-    const proposalsSent = proposals.filter(
-      (p) => p.status !== 'draft'
+    // activeProposals: proposals the client can currently access
+    // (status = 'sent' OR 'viewed'). Automatically set by the system
+    // when the freelancer shares the hosted link or the client opens it.
+    const activeProposals = proposals.filter(
+      (p) => p.status === 'sent' || p.status === 'viewed'
     ).length;
-
-    const accepted = proposals.filter(
-      (p) => p.status === 'accepted' || p.status === 'won'
-    ).length;
-    const decidable = proposals.filter(
-      (p) =>
-        p.status === 'accepted' ||
-        p.status === 'won' ||
-        p.status === 'lost'
-    ).length;
-    const winRate = decidable > 0 ? Math.round((accepted / decidable) * 100) : 0;
 
     // ── Invoice stats ───────────────────────────────────────
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const paidInvoicesThisMonth = invoices.filter(
-      (i) =>
-        i.status === 'paid' &&
-        i.paid_at &&
-        new Date(i.paid_at) >= monthStart
-    );
-    const revenueThisMonth = paidInvoicesThisMonth.reduce(
-      (sum, i) => sum + (i.total_cents || 0),
-      0
-    );
-
     const unpaidCount = invoices.filter((i) => i.status === 'unpaid').length;
     const unpaidTotal = invoices
       .filter((i) => i.status === 'unpaid')
@@ -134,10 +112,8 @@ export async function GET() {
     const recentActivity = activity.slice(0, 8).map(({ sortDate: _, ...rest }) => rest);
 
     return NextResponse.json({
-      proposalsSent,
       proposalsTotal: proposals.length,
-      winRate,
-      revenueThisMonth,
+      activeProposals,
       unpaidCount,
       unpaidTotal,
       clientCount: clients.length,

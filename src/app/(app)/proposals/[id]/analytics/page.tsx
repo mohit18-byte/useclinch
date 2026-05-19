@@ -22,6 +22,7 @@ import {
   PenTool,
   MessageSquare,
   Share2,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,11 @@ interface AnalyticsData {
     clientName: string;
     createdAt: string;
     hostedToken: string;
+    advancePaymentEnabled: boolean;
+    advancePaymentClaimed: boolean;
+    advancePaymentInvoiceId: string | null;
+    advanceAmountCents: number | null;
+    currency: string;
   };
   stats: {
     totalViews: number;
@@ -298,6 +304,69 @@ export default function ProposalAnalyticsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Advance Payment Confirmation Banner ────────── */}
+      {proposal.advancePaymentEnabled && proposal.advancePaymentClaimed && proposal.advancePaymentInvoiceId && (() => {
+        const advInvoice = linkedInvoices.find((inv) => inv.id === proposal.advancePaymentInvoiceId);
+        const isPaid = advInvoice?.paymentStatus === 'paid' || advInvoice?.status === 'paid';
+        const isClaimed = advInvoice?.paymentStatus === 'payment_claimed' || advInvoice?.status === 'payment_claimed';
+        const fmtAmount = (cents: number) =>
+          new Intl.NumberFormat('en-US', { style: 'currency', currency: proposal.currency || 'USD' }).format(cents / 100);
+
+        if (!advInvoice) return null;
+
+        return (
+          <div className={`mb-6 rounded-lg border overflow-hidden ${
+            isPaid
+              ? 'border-green-500/20 bg-green-500/5'
+              : 'border-amber-500/20 bg-amber-500/5'
+          }`}>
+            <div className="flex items-start gap-3 px-4 py-3.5">
+              <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${
+                isPaid ? 'bg-green-500/10' : 'bg-amber-500/10'
+              }`}>
+                <Banknote className={`h-4 w-4 ${isPaid ? 'text-green-400' : 'text-amber-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[13px] font-[550] ${
+                  isPaid ? 'text-green-400' : 'text-amber-400'
+                }`}>
+                  {isPaid
+                    ? 'Advance payment confirmed'
+                    : 'Advance payment claimed by client'}
+                </p>
+                <p className={`mt-0.5 text-[12px] ${
+                  isPaid ? 'text-green-400/60' : 'text-amber-400/60'
+                }`}>
+                  {isPaid
+                    ? `${proposal.clientName} paid${proposal.advanceAmountCents ? ` ${fmtAmount(proposal.advanceAmountCents)}` : ''} — ready to start work`
+                    : `${proposal.clientName} declared payment${proposal.advanceAmountCents ? ` of ${fmtAmount(proposal.advanceAmountCents)}` : ''}. Verify in your account and confirm.`
+                  }
+                </p>
+              </div>
+              {isClaimed && !isPaid && (
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <button
+                    onClick={() => markPaid(advInvoice.id)}
+                    disabled={actionLoading === advInvoice.id}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 px-3 py-1.5 text-[12px] font-[550] text-amber-300 transition-colors hover:bg-amber-500/25 disabled:opacity-50"
+                  >
+                    {actionLoading === advInvoice.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Confirm Payment Received
+                  </button>
+                </div>
+              )}
+              {isPaid && (
+                <div className="flex h-6 items-center rounded-md bg-green-500/10 px-2 flex-shrink-0">
+                  <span className="text-[10px] font-[500] uppercase tracking-wider text-green-400">Confirmed</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Stats Grid ─────────────────────────────────────── */}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

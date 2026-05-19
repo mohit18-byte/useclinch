@@ -8,19 +8,19 @@ import { z, safeParse } from 'zod';
 // ── Section Schemas ─────────────────────────────────────────────
 
 const coverSchema = z.object({
-  title: z.string().min(1),
-  subtitle: z.string().min(1),
+  title: z.string().min(5),
+  subtitle: z.string().min(10),
   date: z.string().min(1),
 });
 
 const problemSchema = z.object({
   headline: z.string().min(1),
-  body: z.string().min(1),
+  body: z.string().min(40, "Problem body too short — likely truncated or generic"),
 });
 
 const solutionSchema = z.object({
   headline: z.string().min(1),
-  body: z.string().min(1),
+  body: z.string().min(40, "Solution body too short — likely truncated or generic"),
 });
 
 const approachStepSchema = z.object({
@@ -56,20 +56,20 @@ const timelineSchema = z.object({
 
 const lineItemSchema = z.object({
   label: z.string().min(1),
-  amount: z.number(),
+  amount: z.number().positive("Line item amount must be greater than 0"),
 });
 
 const pricingSchema = z.object({
   headline: z.string().min(1),
-  summary: z.string().min(1),
+  summary: z.string().min(10),
   lineItems: z.array(lineItemSchema).min(1),
-  total: z.number(),
+  total: z.number().positive("Pricing total must be greater than 0"),
   note: z.string(),
 });
 
 const aboutSchema = z.object({
   headline: z.string().min(1),
-  body: z.string().min(1),
+  body: z.string().min(40, "About body too short — likely missing past project references"),
 });
 
 const faqItemSchema = z.object({
@@ -114,21 +114,39 @@ export function validateProposalContent(raw: unknown): {
 } {
   const result = safeParse(proposalContentSchema, raw);
 
-  if (result.success) {
-    return { success: true, data: result.data };
+  if (!result.success) {
+    // Build a human-readable error message
+    const issues = result.error.issues
+      .slice(0, 5)
+      .map((issue) => {
+        const path = issue.path.join('.');
+        return `${path}: ${issue.message}`;
+      })
+      .join('; ');
+
+    return {
+      success: false,
+      error: `Validation failed: ${issues}`,
+    };
   }
 
-  // Build a human-readable error message
-  const issues = result.error.issues
-    .slice(0, 5) // limit to first 5 issues
-    .map((issue) => {
-      const path = issue.path.join('.');
-      return `${path}: ${issue.message}`;
-    })
-    .join('; ');
+  // Cross-validate: pricing total must approximately equal sum of line items
+  // (after transformPricingAmounts multiplies by 100, we check pre-transform)
+  const data = result.data;
+  if (data.pricing.lineItems.length > 0) {
+    const computedSum = data.pricing.lineItems.reduce(
+      (sum, item) => sum + item.amount,
+      0
+    );
+    // Allow up to 1% rounding tolerance
+    const tolerance = computedSum * 0.01;
+    if (Math.abs(data.pricing.total - computedSum) > Math.max(tolerance, 1)) {
+      return {
+        success: false,
+        error: `Validation failed: pricing.total (${data.pricing.total}) does not match sum of lineItems (${computedSum})`,
+      };
+    }
+  }
 
-  return {
-    success: false,
-    error: `Validation failed: ${issues}`,
-  };
+  return { success: true, data };
 }

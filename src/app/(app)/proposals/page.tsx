@@ -31,6 +31,7 @@ interface ProposalRow {
   client_name: string;
   project_title: string;
   amount: number | null;
+  currency: string;
   status: string;
   created_at: string;
 }
@@ -57,6 +58,7 @@ export default function ProposalsPage() {
     clientEmail: string;
     projectTitle: string;
     lineItems: Array<{ label: string; amount: number }>;
+    currency: string;
   } | null>(null);
 
   // Pre-fetched profile data for the invoice modal
@@ -162,6 +164,7 @@ export default function ProposalsPage() {
         clientEmail: proposal.client_email || '',
         projectTitle: proposal.project_title,
         lineItems: items,
+        currency: (proposal.currency || 'usd').toUpperCase(),
       });
     } catch {
       alert("Something went wrong");
@@ -288,8 +291,13 @@ export default function ProposalsPage() {
                     </td>
                     <td className="hidden px-4 py-3 text-right text-[13px] text-[#8a8f98] md:table-cell">
                       {p.amount
-                        ? `$${(p.amount / 100).toLocaleString()}`
-                        : "—"}
+                        ? new Intl.NumberFormat('en-US', {
+                            style: 'currency',
+                            currency: (p.currency || 'usd').toUpperCase(),
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(p.amount / 100)
+                        : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -447,6 +455,7 @@ export default function ProposalsPage() {
           clientEmail={invoicePicker.clientEmail}
           projectTitle={invoicePicker.projectTitle}
           lineItems={invoicePicker.lineItems}
+          currency={invoicePicker.currency}
           profileData={profileData}
           onClose={() => setInvoicePicker(null)}
           onCreated={() => {
@@ -468,6 +477,7 @@ function InvoicePickerModal({
   clientEmail: initClientEmail,
   projectTitle,
   lineItems: proposalLineItems,
+  currency,
   profileData,
   onClose,
   onCreated,
@@ -477,6 +487,7 @@ function InvoicePickerModal({
   clientEmail: string;
   projectTitle: string;
   lineItems: Array<{ label: string; amount: number }>;
+  currency: string;
   profileData: { email: string; default_payment_instructions: string } | null;
   onClose: () => void;
   onCreated: () => void;
@@ -520,7 +531,7 @@ function InvoicePickerModal({
     .reduce((sum, item) => sum + (item.amount || 0), 0);
 
   function fmt(cents: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(cents / 100);
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -542,6 +553,7 @@ function InvoicePickerModal({
           note: note.trim() || null,
           due_date: dueDate || null,
           payment_instructions: paymentInstructions.trim() || null,
+          currency: currency || 'USD',
         }),
       });
       if (res.ok) {

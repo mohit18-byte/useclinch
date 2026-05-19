@@ -38,6 +38,7 @@ export interface Profile {
   proposals_this_month: number;
   proposals_month_reset: string | null; // date
   default_payment_instructions: string | null;
+  default_currency: string; // e.g. 'USD', 'INR', 'EUR'
   created_at: string; // timestamptz
   updated_at: string;
 }
@@ -86,7 +87,15 @@ export interface Proposal {
   // ── NEW: Hosted page token ──
   hosted_token: string; // uuid, unique
 
-  // Core fields
+  // ── Advance Payment ──
+  advance_payment_enabled: boolean;
+  advance_payment_type: 'instructions' | 'link' | null;
+  advance_payment_value: string | null;      // instructions text OR payment URL
+  advance_payment_amount: number | null;     // fixed amount in cents (mutually exclusive with percent)
+  advance_payment_percent: number | null;    // e.g. 50 = 50% of proposal total
+  advance_payment_claimed: boolean;
+  advance_payment_invoice_id: string | null; // FK to invoices.id
+
   status: ProposalStatus;
   amount: number | null; // cents
   currency: string;

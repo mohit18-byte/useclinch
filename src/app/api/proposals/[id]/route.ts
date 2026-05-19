@@ -105,7 +105,15 @@ export async function PATCH(
       }
     }
 
-    const allowedFields = [...contentFields, "status"];
+    const allowedFields = [
+      ...contentFields,
+      'status',
+      'advance_payment_enabled',
+      'advance_payment_type',
+      'advance_payment_value',
+      'advance_payment_amount',
+      'advance_payment_percent',
+    ];
 
     const updates: Record<string, unknown> = {};
     for (const key of allowedFields) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   Loader2, Plus, Receipt, X, ExternalLink,
-  CheckCircle2, XCircle, DollarSign, AlertTriangle, Pencil,
+  CheckCircle2, XCircle, AlertTriangle, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +20,6 @@ const STATUS_STYLES: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Cancelled", cls: "bg-[#23252a] text-[#62666d]" },
 };
 
-function fmt(cents: number, currency = "USD") {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
-}
 
 function isOverdue(invoice: Invoice) {
   return invoice.status === "unpaid" && invoice.due_date && new Date(invoice.due_date) < new Date();
@@ -71,12 +68,9 @@ export default function InvoicesPage() {
   }, [fetchInvoices]);
 
   /* ── Stats ──────────────────────────────────────────────── */
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const thisMonth = invoices.filter((i) => new Date(i.created_at) >= monthStart);
-  const totalThisMonth = thisMonth.reduce((s, i) => s + i.total_cents, 0);
-  const unpaid = invoices.filter((i) => i.status === "unpaid");
-  const unpaidTotal = unpaid.reduce((s, i) => s + i.total_cents, 0);
+  const unpaidCount = invoices.filter(
+    (i) => i.status === "unpaid" || i.status === "payment_claimed"
+  ).length;
   const paidCount = invoices.filter((i) => i.status === "paid").length;
 
   /* ── Actions ────────────────────────────────────────────── */
@@ -124,9 +118,9 @@ export default function InvoicesPage() {
       {/* Stats */}
       {!loading && invoices.length > 0 && (
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
-          <StatCard icon={DollarSign} label="Invoiced this month" value={fmt(totalThisMonth)} />
-          <StatCard icon={AlertTriangle} label="Unpaid" value={`${unpaid.length} · ${fmt(unpaidTotal)}`} />
-          <StatCard icon={CheckCircle2} label="Paid" value={paidCount.toString()} />
+          <StatCard icon={Receipt}       label="Total created" value={invoices.length.toString()} />
+          <StatCard icon={AlertTriangle} label="Unpaid"        value={unpaidCount.toString()} accent="text-amber-400" />
+          <StatCard icon={CheckCircle2} label="Paid"           value={paidCount.toString()}   accent="text-green-400" />
         </div>
       )}
 
@@ -164,7 +158,6 @@ export default function InvoicesPage() {
               <tr className="border-b border-[#1a1c20]">
                 <th className="px-4 py-3 text-left text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45]">Invoice #</th>
                 <th className="px-4 py-3 text-left text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45]">Client</th>
-                <th className="hidden px-4 py-3 text-right text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45] md:table-cell">Amount</th>
                 <th className="px-4 py-3 text-left text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45]">Status</th>
                 <th className="hidden px-4 py-3 text-right text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45] md:table-cell">Due</th>
                 <th className="hidden px-4 py-3 text-right text-[11px] font-[500] uppercase tracking-wider text-[#3a3f45] sm:table-cell">Created</th>
@@ -190,7 +183,6 @@ export default function InvoicesPage() {
                         </div>
                       )}
                     </td>
-                    <td className="hidden px-4 py-3 text-right text-[13px] text-[#8a8f98] md:table-cell">{fmt(inv.total_cents, inv.currency)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-[500] ${badge.cls}`}>{badge.label}</span>
                       {overdue && <span className="ml-1.5 text-[10px] font-[500] text-red-400">Overdue</span>}
@@ -272,14 +264,23 @@ export default function InvoicesPage() {
 }
 
 /* ── Stat Card ─────────────────────────────────────────────── */
-function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function StatCard({
+  icon: Icon, label, value, accent,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  accent?: string;
+}) {
   return (
     <div className="rounded-lg border border-[#1a1c20] bg-[#0c0d0e] p-5">
       <div className="flex items-center justify-between">
         <p className="text-[12px] font-[500] uppercase tracking-wide text-[#62666d]">{label}</p>
-        <Icon className="h-4 w-4 text-[#3a3f45]" />
+        <Icon className={`h-4 w-4 ${accent ?? 'text-[#3a3f45]'}`} />
       </div>
-      <p className="mt-3 text-[22px] font-[600] tracking-[-0.03em] text-white leading-none">{value}</p>
+      <p className={`mt-3 text-[22px] font-[600] tracking-[-0.03em] leading-none ${accent ?? 'text-white'}`}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -308,6 +309,9 @@ function NewInvoiceModal({ onClose, onCreated, proposals, profileData }: {
   const [selectedProposalId, setSelectedProposalId] = useState("");
 
   const total = lineItems.reduce((s, i) => s + (i.amount_cents || 0), 0);
+  function fmt(cents: number) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  }
 
   function updateItem(idx: number, field: keyof InvoiceLineItem, value: string | number) {
     setLineItems((prev) =>
@@ -520,6 +524,9 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: Invoice; onC
   const [error, setError] = useState("");
 
   const total = lineItems.reduce((s, i) => s + (i.amount_cents || 0), 0);
+  function fmt(cents: number) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  }
 
   function updateItem(idx: number, field: keyof InvoiceLineItem, value: string | number) {
     setLineItems((prev) =>
@@ -565,10 +572,6 @@ function EditInvoiceModal({ invoice, onClose, onSaved }: { invoice: Invoice; onC
     } finally {
       setSaving(false);
     }
-  }
-
-  function fmt(cents: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
   }
 
   return (
